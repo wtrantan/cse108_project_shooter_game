@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Base shape (will be colored by the game) -->
+  <rect x="10" y="10" width="80" height="80" fill="transparent" />
+  
+  <!-- Player character (simple robot) -->
+  <circle cx="50" cy="35" r="20" fill="white" stroke="black" stroke-width="2" />
+  
+  <!-- Eyes -->
+  <circle cx="40" cy="30" r="5" fill="black" />
+  <circle cx="60" cy="30" r="5" fill="black" />
+  
+  <!-- Smile -->
+  <path d="M35,45 Q50,55 65,45" fill="none" stroke="black" stroke-width="2" />
+  
+  <!-- Body -->
+  <rect x="35" y="55" width="30" height="35" fill="white" stroke="black" stroke-width="2" />
+  
+  <!-- Arms -->
+  <rect x="15" y="60" width="20" height="10" fill="white" stroke="black" stroke-width="2" rx="5" />
+  <rect x="65" y="60" width="20" height="10" fill="white" stroke="black" stroke-width="2" rx="5" />
+</svg>

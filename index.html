@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chat Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #87CEEB;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+        }
+        #loginContainer, #registerContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            width: 300px;
+        }
+        #registerContainer {
+            display: none;
+        }
+        #gameCanvas {
+            background-color: #87CEEB;
+        }
+        #chatBox {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: calc(100% - 20px);
+            max-width: 400px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+        #chatMessages {
+            height: 150px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding: 5px;
+            background-color: white;
+            border-radius: 5px;
+        }
+        #chatInput {
+            width: calc(100% - 70px);
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+        .leaderboard {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 200px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 5px;
+    padding: 10px;
+    z-index: 100;
+}
+
+.leaderboard h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #FFD700;
+    font-size: 16px;
+}
+
+.playerRank {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 14px;
+    padding: 3px 5px;
+    border-radius: 3px;
+}
+
+.playerRank.self {
+    background-color: rgba(255, 215, 0, 0.3);
+    font-weight: bold;
+}
+
+.colorPicker {
+    position: absolute;
+    top: 210px;
+    right: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    z-index: 99;
+}
+        .scoreDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            text-align: left;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button.secondary {
+            background-color: #777;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .error-message {
+            color: #f44336;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .playerName {
+            position: absolute;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        .minimap {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 150px;
+            height: 150px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginContainer">
+        <h2>Welcome to Chat Lobby!</h2>
+        <div class="input-group">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" placeholder="Username">
+        </div>
+        <div class="input-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" placeholder="Password">
+        </div>
+        <div class="error-message" id="loginError"></div>
+        <button id="loginButton">Login</button>
+        <p>Don't have an account? <a href="#" id="showRegisterLink">Register</a></p>
+    </div>
+    
+    <div id="registerContainer">
+        <h2>Create Account</h2>
+        <div class="input-group">
+            <label for="registerUsername">Username:</label>
+            <input type="text" id="registerUsername" placeholder="Username (min 3 characters)">
+        </div>
+        <div class="input-group">
+            <label for="registerPassword">Password:</label>
+            <input type="password" id="registerPassword" placeholder="Password (min 4 characters)">
+        </div>
+        <div class="input-group">
+            <label for="confirmPassword">Confirm Password:</label>
+            <input type="password" id="confirmPassword" placeholder="Confirm Password">
+        </div>
+        <div class="error-message" id="registerError"></div>
+        <button id="registerButton">Register</button>
+        <p>Already have an account? <a href="#" id="showLoginLink">Login</a></p>
+    </div>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div class="scoreDisplay" id="scoreDisplay">Score: 0</div>
+        <div class="colorPicker">
+            <p>Change your color:</p>
+            <input type="color" id="colorPicker" value="#FF0000">
+            <button id="applyColorButton">Apply</button>
+            <hr style="margin: 10px 0;">
+            <button id="logoutButton" class="secondary">Log Out</button>
+            <button id="deleteAccountButton" style="background-color: #f44336;">Delete Account</button>
+        </div>
+        <div class="minimap" id="minimap"></div>
+        <div id="chatBox">
+            <div id="chatMessages"></div>
+            <div>
+                <input type="text" id="chatInput" placeholder="Type your message...">
+                <button id="sendButton">Send</button>
+            </div>
+        </div>
+        <div class="leaderboard">
+            <h3>Leaderboard</h3>
+            <div id="leaderboardContent"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+    <script>
+        // Connect to the server
+        const socket = io();
+        
+        // Game variables
+        let canvas, ctx;
+        let username = "";
+        let userColor = "#FF0000";
+        let players = {};
+        let myId = null;
+        let playerScore = 0;
+        let gameObjects = {
+            trees: [],
+            rocks: [],
+            coins: []
+        };
+        let bullets = [];
+    let mouseX = 0;
+    let mouseY = 0;
+    const BULLET_SPEED = 10;
+    const BULLET_SIZE = 8;
+    const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
+    let lastShotTime = 0;
+        // Game constants
+        const PLAYER_SPEED = 10;
+        const PLAYER_SIZE = 50;
+        const COIN_SIZE = 30;
+        
+        // Game assets preloading
+        const playerSprite = new Image();
+        playerSprite.src = './player-sprite.svg';
+        
+        const treeSprite = new Image();
+        treeSprite.src = '/tree.svg'; // Create this image or use a placeholder
+        
+        const rockSprite = new Image();
+        rockSprite.src = '/rock.png'; // Create this image or use a placeholder
+        
+        const coinSprite = new Image();
+        coinSprite.src = '/coin.png'; // Create this image or use a placeholder
+        
+        // Camera tracking
+        let cameraX = 0;
+        let cameraY = 0;
+        const WORLD_WIDTH = 2000;
+        const WORLD_HEIGHT = 1500;
+        
+        // DOM elements
+        const loginContainer = document.getElementById('loginContainer');
+        const registerContainer = document.getElementById('registerContainer');
+        const gameContainer = document.getElementById('gameContainer');
+        const loginError = document.getElementById('loginError');
+        const registerError = document.getElementById('registerError');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        
+        // Show/hide auth forms
+        document.getElementById('showRegisterLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginContainer.style.display = 'none';
+            registerContainer.style.display = 'block';
+        });
+        
+        document.getElementById('showLoginLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            registerContainer.style.display = 'none';
+            loginContainer.style.display = 'block';
+        });
+        
+        // Register handling
+        document.getElementById('registerButton').addEventListener('click', register);
+        
+        async function register() {
+            const usernameInput = document.getElementById('registerUsername');
+            const passwordInput = document.getElementById('registerPassword');
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
+            
+            // Reset error message
+            registerError.textContent = '';
+            
+            // Validate inputs
+            if (username.length < 3) {
+                registerError.textContent = 'Username must be at least 3 characters long';
+                return;
+            }
+            
+            if (password.length < 4) {
+                registerError.textContent = 'Password must be at least 4 characters long';
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                registerError.textContent = 'Passwords do not match';
+                return;
+            }
+            
+            try {
+                // Send register request to server
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    registerError.textContent = data.error || 'Registration failed';
+                    return;
+                }
+                
+                // Set color from server
+                userColor = data.color;
+                
+                // Show login form
+                registerContainer.style.display = 'none';
+                loginContainer.style.display = 'block';
+                loginError.textContent = 'Registration successful! Please login.';
+                
+                // Pre-fill username
+                document.getElementById('loginUsername').value = username;
+            } catch (error) {
+                console.error('Registration error:', error);
+                registerError.textContent = 'Server error. Please try again later.';
+            }
+        }
+        
+        // Login handling
+        document.getElementById('loginButton').addEventListener('click', login);
+        document.getElementById('loginUsername').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginPassword').focus();
+            }
+        });
+        document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+        
+        async function login() {
+            const usernameInput = document.getElementById('loginUsername');
+            const passwordInput = document.getElementById('loginPassword');
+            
+            username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            
+            // Reset error message
+            loginError.textContent = '';
+            
+            // Validate inputs
+            if (!username || !password) {
+                loginError.textContent = 'Username and password are required';
+                return;
+            }
+            
+            try {
+                // Send login request to server
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    loginError.textContent = data.error || 'Login failed';
+                    return;
+                }
+                
+                // Set user data from database
+                userColor = data.color;
+                playerScore = data.score || 0;
+                document.getElementById('colorPicker').value = userColor;
+                
+                // Update score display
+                scoreDisplay.textContent = `Score: ${playerScore}`;
+                
+                // Join the game using socket
+                socket.emit('join_game', {
+                    username: username,
+                    color: userColor
+                });
+                
+                // Wait for server confirmation
+                socket.once('join_success', (playerId) => {
+                    myId = playerId;
+                    
+                    // Hide login and show game
+                    loginContainer.style.display = 'none';
+                    gameContainer.style.display = 'block';
+                    
+                    // Initialize the game
+                    initGame();
+                });
+            } catch (error) {
+                console.error('Login error:', error);
+                loginError.textContent = 'Server error. Please try again later.';
+            }
+        }
+        
+        // Initialize the game after successful login
+        function initGame() {
+            // Set up the canvas
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size to window size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Set up chat functionality
+            document.getElementById('sendButton').addEventListener('click', sendMessage);
+            document.getElementById('chatInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            
+            // Set up color picker
+            document.getElementById('applyColorButton').addEventListener('click', changeColor);
+            
+            // Set up movement controls
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('mousemove', (e) => {
+            // Get mouse position relative to canvas
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            updateLeaderboard();
+        });
+            
+// Add spacebar shooting in handleKeyDown function, or as a separate event listener:
+         window.addEventListener('keydown', (e) => {
+            const ammo = 10;
+            if (e.code === 'Space' || e.key === ' ') {
+            // Check if player has ammo
+            if (ammo > 0) {
+                // Shoot bullet
+                shootBullet();
+            }
+        }
+        });
+            // Set up minimap
+            setupMinimap();
+            
+            // Start the game loop
+            requestAnimationFrame(gameLoop);
+            
+            // Listen for server updates
+            socket.on('game_state', (gameState) => {
+                players = gameState.players;
+                
+                // Update game objects if available
+                if (gameState.gameObjects) {
+                    gameObjects = gameState.gameObjects;
+                }
+                
+                // Update score display if this player's score changed
+                if (myId && players[myId]) {
+                    if (playerScore !== players[myId].score) {
+                        playerScore = players[myId].score;
+                        scoreDisplay.textContent = `Score: ${playerScore}`;
+                    }
+                }
+                socket.on('bullets_update', (serverBullets) => {
+    // Add any new bullets from server that aren't in our local array
+    for (const serverBullet of serverBullets) {
+        if (!bullets.some(b => b.id === serverBullet.id)) {
+            bullets.push(serverBullet);
+        }
+    }
+});
+
+socket.on('player_hit', (data) => {
+    const { playerId, damage, shooterId } = data;
+    
+    // If this is the player being hit, show visual feedback
+    if (playerId === myId) {
+        // Flash the screen red or play hurt animation
+        flashScreen('rgba(255,0,0,0.3)');
+        
+        // Decrease score for the player being hit
+        if (players[playerId]) {
+            players[playerId].score -= damage;
+            
+            // Update local score if it's the current player
+            playerScore = players[playerId].score;
+            scoreDisplay.textContent = `Score: ${playerScore}`;
+        }
+    }
+    
+    // If this is the player who shot, show hit confirmation
+    if (shooterId === myId) {
+        // Show hit marker or play hit sound
+        playHitConfirmSound();
+        
+        // Increase score for the shooter
+        if (players[shooterId]) {
+            players[shooterId].score += damage;
+            
+            // Update local score if it's the current player
+            if (shooterId === myId) {
+                playerScore = players[shooterId].score;
+                scoreDisplay.textContent = `Score: ${playerScore}`;
+            }
+        }
+    }
+    
+    // Update leaderboard
+    updateLeaderboard();
+});
+                // Update minimap
+                updateMinimap();
+            });
+            
+            socket.on('chat_message', (data) => {
+                addChatMessage(data.username, data.message);
+            });
+        }
+        // Set up logout and delete account buttons
+document.getElementById('logoutButton').addEventListener('click', handleLogout);
+document.getElementById('deleteAccountButton').addEventListener('click', confirmDeleteAccount);
+
+// Logout function
+function handleLogout() {
+    // Disconnect from the socket
+    socket.disconnect();
+    
+    // Hide game container and show login form
+    gameContainer.style.display = 'none';
+    loginContainer.style.display = 'block';
+    
+    // Clear password field
+    document.getElementById('loginPassword').value = '';
+    
+    // Optional: Show a message to the user
+    loginError.textContent = 'You have been logged out successfully.';
+    loginError.style.color = 'green';
+}
+
+// Delete account confirmation
+function confirmDeleteAccount() {
+    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+        // Call the delete account API
+        deleteAccount();
+    }
+}
+
+// Delete account function
+async function deleteAccount() {
+    try {
+        // Send delete request to server
+        const response = await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: username })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            alert(`Failed to delete account: ${data.error}`);
+            return;
+        }
+        
+        // Disconnect socket
+        socket.disconnect();
+        
+        // Show login screen
+        gameContainer.style.display = 'none';
+        loginContainer.style.display = 'block';
+        
+        // Show success message
+        loginError.textContent = 'Your account has been deleted successfully.';
+        loginError.style.color = 'green';
+        
+        // Clear fields
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+        
+    } catch (error) {
+        console.error('Delete account error:', error);
+        alert('Server error. Please try again later.');
+    }
+}
+        function setupMinimap() {
+            const minimap = document.getElementById('minimap');
+            const minimapCanvas = document.createElement('canvas');
+            minimapCanvas.width = 150;
+            minimapCanvas.height = 150;
+            minimap.appendChild(minimapCanvas);
+        }
+        
+        function updateMinimap() {
+            const minimap = document.querySelector('#minimap canvas');
+            const minimapCtx = minimap.getContext('2d');
+            const minimapWidth = minimap.width;
+            const minimapHeight = minimap.height;
+            
+            // Clear minimap
+            minimapCtx.clearRect(0, 0, minimapWidth, minimapHeight);
+            
+            // Draw world boundary
+            minimapCtx.strokeStyle = '#fff';
+            minimapCtx.strokeRect(0, 0, minimapWidth, minimapHeight);
+            
+            // Draw trees as green dots
+            minimapCtx.fillStyle = '#0a5';
+            gameObjects.trees.forEach(tree => {
+                minimapCtx.fillRect(
+                    (tree.x / WORLD_WIDTH) * minimapWidth,
+                    (tree.y / WORLD_HEIGHT) * minimapHeight,
+                    3, 3
+                );
+            });
+            
+            // Draw rocks as gray dots
+            minimapCtx.fillStyle = '#777';
+            gameObjects.rocks.forEach(rock => {
+                minimapCtx.fillRect(
+                    (rock.x / WORLD_WIDTH) * minimapWidth,
+                    (rock.y / WORLD_HEIGHT) * minimapHeight,
+                    2, 2
+                );
+            });
+            
+            // Draw coins as yellow dots
+            minimapCtx.fillStyle = '#ff0';
+            gameObjects.coins.forEach(coin => {
+                if (!coin.collected) {
+                    minimapCtx.fillRect(
+                        (coin.x / WORLD_WIDTH) * minimapWidth,
+                        (coin.y / WORLD_HEIGHT) * minimapHeight,
+                        3, 3
+                    );
+                }
+            });
+            
+            // Draw players
+            Object.values(players).forEach(player => {
+                minimapCtx.fillStyle = player.color || '#f00';
+                minimapCtx.fillRect(
+                    (player.x / WORLD_WIDTH) * minimapWidth,
+                    (player.y / WORLD_HEIGHT) * minimapHeight,
+                    4, 4
+                );
+            });
+            
+            // Highlight current player
+            if (myId && players[myId]) {
+                const player = players[myId];
+                minimapCtx.strokeStyle = '#fff';
+                minimapCtx.strokeRect(
+                    (player.x / WORLD_WIDTH) * minimapWidth - 2,
+                    (player.y / WORLD_HEIGHT) * minimapHeight - 2,
+                    8, 8
+                );
+                
+                // Draw view rectangle
+                minimapCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+                minimapCtx.strokeRect(
+                    (cameraX / WORLD_WIDTH) * minimapWidth,
+                    (cameraY / WORLD_HEIGHT) * minimapHeight,
+                    (canvas.width / WORLD_WIDTH) * minimapWidth,
+                    (canvas.height / WORLD_HEIGHT) * minimapHeight
+                );
+            }
+        }
+        
+        function changeColor() {
+            const colorPicker = document.getElementById('colorPicker');
+            const newColor = colorPicker.value;
+            
+            // Update local color
+            userColor = newColor;
+            
+            // Send to server
+            socket.emit('change_color', { color: newColor });
+        }
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        function handleKeyDown(e) {
+    if (!myId || !players[myId]) return;
+    
+    let moved = false;
+    const player = players[myId];
+    let newX = player.x;
+    let newY = player.y;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+            newY -= PLAYER_SPEED;
+            moved = true;
+            break;
+        case 'ArrowDown':
+        case 's':
+            newY += PLAYER_SPEED;
+            moved = true;
+            break;
+        case 'ArrowLeft':
+        case 'a':
+            newX -= PLAYER_SPEED;
+            moved = true;
+            break;
+        case 'ArrowRight':
+        case 'd':
+            newX += PLAYER_SPEED;
+            moved = true;
+            break;
+    }
+    
+    // Keep player within world bounds
+    if (newX < 0) newX = 0;
+    if (newY < 0) newY = 0;
+    if (newX > WORLD_WIDTH - PLAYER_SIZE) newX = WORLD_WIDTH - PLAYER_SIZE;
+    if (newY > WORLD_HEIGHT - PLAYER_SIZE) newY = WORLD_HEIGHT - PLAYER_SIZE;
+    
+    // Check for collision with obstacles
+    if (moved && !checkCollision(player, newX, newY)) {
+        // Update player position only if no collision
+        player.x = newX;
+        player.y = newY;
+        
+        // Check for coin collection
+        checkCoinCollection(player);
+        
+        // Send updated position to server
+        socket.emit('move', {
+            x: player.x,
+            y: player.y
+        });
+    }
+}
+function updateLeaderboard() {
+    const leaderboardContent = document.getElementById('leaderboardContent');
+    if (!leaderboardContent) return;
+    
+    // Clear existing content
+    leaderboardContent.innerHTML = '';
+    
+    // Get all players and sort by score
+    const playerList = Object.values(players).sort((a, b) => b.score - a.score);
+    
+    // Add each player to the leaderboard
+    playerList.forEach((player, index) => {
+        const playerRow = document.createElement('div');
+        playerRow.className = 'playerRank';
+        
+        // Highlight current player
+        if (player.id === myId) {
+            playerRow.classList.add('self');
+        }
+        
+        // Add color indicator
+        const colorIndicator = document.createElement('span');
+        colorIndicator.style.display = 'inline-block';
+        colorIndicator.style.width = '10px';
+        colorIndicator.style.height = '10px';
+        colorIndicator.style.backgroundColor = player.color;
+        colorIndicator.style.marginRight = '5px';
+        colorIndicator.style.borderRadius = '50%';
+        
+        // Create rank and name element
+        const rankAndName = document.createElement('span');
+        rankAndName.textContent = `${index + 1}. ${player.username}`;
+        
+        // Create score element
+        const score = document.createElement('span');
+        score.textContent = player.score;
+        
+        // Add elements to row
+        playerRow.appendChild(colorIndicator);
+        playerRow.appendChild(rankAndName);
+        playerRow.appendChild(score);
+        
+        // Add row to leaderboard
+        leaderboardContent.appendChild(playerRow);
+    });
+}
+function shootBullet() {
+    if (!myId || !players[myId]) return;
+    
+    // Check cooldown
+    const currentTime = Date.now();
+    if (currentTime - lastShotTime < BULLET_COOLDOWN) return;
+    lastShotTime = currentTime;
+    
+    const player = players[myId];
+    
+    // Calculate bullet starting position (center of player)
+    const startX = player.x + PLAYER_SIZE / 2;
+    const startY = player.y + PLAYER_SIZE / 2;
+    
+    // Calculate direction vector from player to mouse, considering camera position
+    const targetX = mouseX + cameraX;
+    const targetY = mouseY + cameraY;
+    
+    // Calculate direction vector
+    let dirX = targetX - startX;
+    let dirY = targetY - startY;
+    
+    // Normalize the direction vector
+    const length = Math.sqrt(dirX * dirX + dirY * dirY);
+    if (length > 0) {
+        dirX /= length;
+        dirY /= length;
+    }
+    
+    // Create bullet object
+    const bullet = {
+        id: `bullet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        x: startX,
+        y: startY,
+        dirX: dirX,
+        dirY: dirY,
+        playerId: myId,
+        color: player.color
+    };
+    
+    // Add to local bullets array
+    bullets.push(bullet);
+    
+    // Send to server
+    socket.emit('shoot_bullet', bullet);
+    
+    // Play sound effect
+    playShootSound();
+}
+
+// 4. Add sound effect function
+function playShootSound() {
+    const shootSound = new Audio('/shoot-sound.mp3'); // Create this sound or use a placeholder
+    shootSound.volume = 0.2;
+    shootSound.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// 5. Add bullet update and rendering functions
+function updateBullets(deltaTime) {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        
+        // Move bullet
+        bullet.x += bullet.dirX * BULLET_SPEED;
+        bullet.y += bullet.dirY * BULLET_SPEED;
+        
+        // Check if bullet is out of bounds
+        if (
+            bullet.x < 0 ||
+            bullet.x > WORLD_WIDTH ||
+            bullet.y < 0 ||
+            bullet.y > WORLD_HEIGHT
+        ) {
+            bullets.splice(i, 1);
+            continue;
+        }
+        
+        // Check collision with obstacles (optional, remove if you want bullets to pass through)
+        if (checkBulletObstacleCollision(bullet)) {
+            bullets.splice(i, 1);
+            continue;
+        }
+        
+        // Check collision with other players (only check on client side for visual feedback)
+        // Actual hit registration happens on server
+        for (const playerId in players) {
+            // Don't collide with the shooter
+            if (playerId === bullet.playerId) continue;
+            
+            const player = players[playerId];
+            
+            // Simple circle-rectangle collision
+            if (
+                bullet.x >= player.x &&
+                bullet.x <= player.x + PLAYER_SIZE &&
+                bullet.y >= player.y &&
+                bullet.y <= player.y + PLAYER_SIZE
+            ) {
+                // Visual effect only - hit registration is done on server
+                createHitEffect(bullet.x, bullet.y);
+                bullets.splice(i, 1);
+                break;
+            }
+        }
+    }
+}
+
+function checkBulletObstacleCollision(bullet) {
+    // Check rocks
+    for (const rock of gameObjects.rocks) {
+        const rockSize = rock.size || 40;
+        if (
+            bullet.x >= rock.x &&
+            bullet.x <= rock.x + rockSize &&
+            bullet.y >= rock.y &&
+            bullet.y <= rock.y + rockSize
+        ) {
+            return true;
+        }
+    }
+    
+    // Check trees
+    for (const tree of gameObjects.trees) {
+        const treeSize = tree.size || 70;
+        // Only collide with the trunk part
+        if (
+            bullet.x >= tree.x + treeSize * 0.3 &&
+            bullet.x <= tree.x + treeSize * 0.7 &&
+            bullet.y >= tree.y + treeSize * 0.5 &&
+            bullet.y <= tree.y + treeSize
+        ) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// 6. Add hit effect function for visual feedback
+function createHitEffect(x, y) {
+    // This could be expanded with particles, animation, etc.
+    const hitSound = new Audio('/hit-sound.mp3'); // Create this sound or use a placeholder
+    hitSound.volume = 0.3;
+    hitSound.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// 7. Add bullet drawing function
+function drawBullets() {
+    for (const bullet of bullets) {
+        const drawX = bullet.x - cameraX;
+        const drawY = bullet.y - cameraY;
+        
+        // Only draw if visible on screen
+        if (
+            drawX + BULLET_SIZE >= 0 &&
+            drawX <= canvas.width &&
+            drawY + BULLET_SIZE >= 0 &&
+            drawY <= canvas.height
+        ) {
+            // Draw bullet
+            ctx.fillStyle = bullet.color || '#FF0000';
+            ctx.beginPath();
+            ctx.arc(drawX, drawY, BULLET_SIZE/2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Optional: Draw trail/tail
+            ctx.strokeStyle = bullet.color || '#FF0000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(drawX, drawY);
+            ctx.lineTo(drawX - bullet.dirX * 10, drawY - bullet.dirY * 10);
+            ctx.stroke();
+        }
+    }
+}
+function flashScreen(color) {
+    // Create overlay div
+    const flash = document.createElement('div');
+    flash.style.position = 'absolute';
+    flash.style.top = '0';
+    flash.style.left = '0';
+    flash.style.width = '100%';
+    flash.style.height = '100%';
+    flash.style.backgroundColor = color;
+    flash.style.pointerEvents = 'none';
+    flash.style.zIndex = '1000';
+    flash.style.opacity = '0.6';
+    
+    // Add to game container
+    gameContainer.appendChild(flash);
+    
+    // Fade out and remove
+    setTimeout(() => {
+        flash.style.transition = 'opacity 0.3s';
+        flash.style.opacity = '0';
+        setTimeout(() => {
+            gameContainer.removeChild(flash);
+        }, 300);
+    }, 100);
+}
+
+function playHitConfirmSound() {
+    const hitConfirmSound = new Audio('/hit-confirm.mp3'); // Create this sound or use a placeholder
+    hitConfirmSound.volume = 0.2;
+    hitConfirmSound.play().catch(e => console.log('Audio play failed:', e));
+}
+
+        function checkCoinCollection(player) {
+            // Define player hitbox
+            const playerHitbox = {
+                x: player.x + 10,
+                y: player.y + 10,
+                width: PLAYER_SIZE - 20,
+                height: PLAYER_SIZE - 20
+            };
+            
+            // Check collision with each coin
+            gameObjects.coins.forEach(coin => {
+                if (!coin.collected) {
+                    // Define coin hitbox
+                    const coinHitbox = {
+                        x: coin.x + 5,
+                        y: coin.y + 5,
+                        width: COIN_SIZE - 10,
+                        height: COIN_SIZE - 10
+                    };
+                    
+                    // Check hitbox overlap
+                    if (
+                        playerHitbox.x < coinHitbox.x + coinHitbox.width &&
+                        playerHitbox.x + playerHitbox.width > coinHitbox.x &&
+                        playerHitbox.y < coinHitbox.y + coinHitbox.height &&
+                        playerHitbox.y + playerHitbox.height > coinHitbox.y
+                    ) {
+                        // Collect the coin (server will validate)
+                        socket.emit('collect_coin', coin.id);
+                        
+                        // Play coin collection sound
+                        playCoinSound();
+                    }
+                }
+            });
+        }
+        function checkCollision(player, newX, newY) {
+    // Define player hitbox with some padding for better gameplay
+    const playerHitbox = {
+        x: newX + 10,
+        y: newY + 10,
+        width: PLAYER_SIZE - 20,
+        height: PLAYER_SIZE - 20
+    };
+    
+    // Check collision with trees
+    for (const tree of gameObjects.trees) {
+        const treeSize = tree.size || 70;
+        // Trees have a smaller collision box than visual size
+        const treeHitbox = {
+            x: tree.x + treeSize * 0.2,
+            y: tree.y + treeSize * 0.5, // Mostly bottom part (trunk)
+            width: treeSize * 0.6,
+            height: treeSize * 0.5
+        };
+        
+        if (
+            playerHitbox.x < treeHitbox.x + treeHitbox.width &&
+            playerHitbox.x + playerHitbox.width > treeHitbox.x &&
+            playerHitbox.y < treeHitbox.y + treeHitbox.height &&
+            playerHitbox.y + playerHitbox.height > treeHitbox.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    // Check collision with rocks
+    for (const rock of gameObjects.rocks) {
+        const rockSize = rock.size || 40;
+        // Rocks have a slightly smaller collision box
+        const rockHitbox = {
+            x: rock.x + rockSize * 0.1,
+            y: rock.y + rockSize * 0.1,
+            width: rockSize * 0.8,
+            height: rockSize * 0.8
+        };
+        
+        if (
+            playerHitbox.x < rockHitbox.x + rockHitbox.width &&
+            playerHitbox.x + playerHitbox.width > rockHitbox.x &&
+            playerHitbox.y < rockHitbox.y + rockHitbox.height &&
+            playerHitbox.y + playerHitbox.height > rockHitbox.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    return false; // No collision
+}
+        function playCoinSound() {
+            const coinSound = new Audio('/coin-sound.mp3'); // Create this sound or use a placeholder
+            coinSound.volume = 0.3;
+            coinSound.play().catch(e => console.log('Audio play failed:', e));
+        }
+        
+        function sendMessage() {
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+            
+            if (message.length > 0) {
+                socket.emit('chat_message', message);
+                chatInput.value = '';
+            }
+        }
+        
+        function addChatMessage(username, message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${username}: ${message}`;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function gameLoop() {
+            if (!myId || !players[myId]) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            // Update camera position to follow player
+            const player = players[myId];
+            cameraX = player.x - canvas.width / 2 + PLAYER_SIZE / 2;
+            cameraY = player.y - canvas.height / 2 + PLAYER_SIZE / 2;
+            
+            // Clamp camera to world bounds
+            cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+            cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - canvas.height));
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw sky background
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw ground
+            ctx.fillStyle = '#7CFC00';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw clouds (optional)
+            drawClouds();
+            
+            // Draw rocks
+            drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
+            
+            // Draw trees
+            drawGameObjects(gameObjects.trees, treeSprite, 'green');
+            
+            // Draw coins
+            drawCoins();
+            
+            // Draw all players
+            drawPlayers();
+            
+            updateBullets(16); // Assuming ~60fps, 16ms per frame
+
+            // Draw bullets (add this after drawing players)
+            drawBullets();
+            // Continue the game loop
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function drawClouds() {
+            // Simple cloud drawing
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            
+            // Create a few static clouds
+            const clouds = [
+                { x: 100, y: 100, size: 100 },
+                { x: 500, y: 150, size: 120 },
+                { x: 900, y: 80, size: 90 },
+                { x: 1300, y: 200, size: 110 },
+                { x: 1700, y: 120, size: 130 }
+            ];
+            
+            clouds.forEach(cloud => {
+                const drawX = cloud.x - cameraX;
+                const drawY = cloud.y - cameraY;
+                
+                // Only draw if visible on screen
+                if (
+                    drawX + cloud.size >= 0 &&
+                    drawX <= canvas.width &&
+                    drawY + cloud.size >= 0 &&
+                    drawY <= canvas.height
+                ) {
+                    // Draw simple cloud (3 circles)
+                    ctx.beginPath();
+                    ctx.arc(drawX, drawY, cloud.size * 0.5, 0, Math.PI * 2);
+                    ctx.arc(drawX + cloud.size * 0.4, drawY - cloud.size * 0.1, cloud.size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(drawX + cloud.size * 0.4, drawY + cloud.size * 0.1, cloud.size * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+        
+        function drawGameObjects(objects, sprite, fallbackColor) {
+            objects.forEach(obj => {
+                const drawX = obj.x - cameraX;
+                const drawY = obj.y - cameraY;
+                const size = obj.size || 50;
+                
+                // Only draw if visible on screen (with buffer)
+                if (
+                    drawX + size >= -100 &&
+                    drawX <= canvas.width + 100 &&
+                    drawY + size >= -100 &&
+                    drawY <= canvas.height + 100
+                ) {
+                    // Try to draw sprite, fallback to color shape
+                    try {
+                        ctx.drawImage(sprite, drawX, drawY, size, size);
+                    } catch (e) {
+                        // Fallback to colored shape
+                        ctx.fillStyle = fallbackColor;
+                        
+                        if (objects === gameObjects.rocks) {
+                            // Draw rock (irregular circle)
+                            ctx.beginPath();
+                            ctx.ellipse(drawX + size/2, drawY + size/2, size/2, size/2 * 0.8, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else if (objects === gameObjects.trees) {
+                            // Draw tree (triangle top with rectangle trunk)
+                            ctx.fillStyle = '#8B4513'; // Brown trunk
+                            ctx.fillRect(drawX + size/3, drawY + size/2, size/3, size/2);
+                            
+                            ctx.fillStyle = '#006400'; // Dark green foliage
+                            ctx.beginPath();
+                            ctx.moveTo(drawX, drawY + size/2);
+                            ctx.lineTo(drawX + size/2, drawY);
+                            ctx.lineTo(drawX + size, drawY + size/2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            });
+        }
+        
+        function drawCoins() {
+            ctx.fillStyle = '#FFD700'; // Gold color
+            
+            gameObjects.coins.forEach(coin => {
+                if (!coin.collected) {
+                    const drawX = coin.x - cameraX;
+                    const drawY = coin.y - cameraY;
+                    
+                    // Only draw if visible on screen
+                    if (
+                        drawX + COIN_SIZE >= 0 &&
+                        drawX <= canvas.width &&
+                        drawY + COIN_SIZE >= 0 &&
+                        drawY <= canvas.height
+                    ) {
+                        // Try to draw sprite
+                        try {
+                            ctx.drawImage(coinSprite, drawX, drawY, COIN_SIZE, COIN_SIZE);
+                        } catch (e) {
+                            // Fallback to gold circle
+                            ctx.beginPath();
+                            ctx.arc(drawX + COIN_SIZE/2, drawY + COIN_SIZE/2, COIN_SIZE/2, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Add coin detail (inner circle)
+                            ctx.fillStyle = '#FFA500';
+                            ctx.beginPath();
+                            ctx.arc(drawX + COIN_SIZE/2, drawY + COIN_SIZE/2, COIN_SIZE/4, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            ctx.fillStyle = '#FFD700';
+                        }
+                        
+                        // Animate coin bob up and down
+                        coin.bobOffset = coin.bobOffset || 0;
+                        coin.bobDirection = coin.bobDirection || 1;
+                        coin.bobOffset += 0.05 * coin.bobDirection;
+                        
+                        if (coin.bobOffset > 5 || coin.bobOffset < 0) {
+                            coin.bobDirection *= -1;
+                        }
+                    }
+                }
+            });
+        }
+        
+        function drawPlayers() {
+            for (const id in players) {
+                const player = players[id];
+                const drawX = player.x - cameraX;
+                const drawY = player.y - cameraY;
+                
+                // Only draw if visible on screen
+                if (
+                    drawX + PLAYER_SIZE >= 0 &&
+                    drawX <= canvas.width &&
+                    drawY + PLAYER_SIZE >= 0 &&
+                    drawY <= canvas.height
+                ) {
+                    // First draw colored square (for customized color)
+                    ctx.fillStyle = player.color || '#FF0000';
+                    ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+                    
+                    // Then draw player sprite with transparency
+                    try {
+                        ctx.globalAlpha = 0.7; // Make sprite semi-transparent
+                        ctx.drawImage(playerSprite, drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+                        ctx.globalAlpha = 1.0; // Reset alpha
+                    } catch (e) {
+                        // If sprite fails, we already have the colored square
+                    }
+                    
+                    // Draw player name
+                    ctx.fillStyle = 'white';
+                    ctx.font = '14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(player.username, drawX + PLAYER_SIZE / 2, drawY - 5);
+                    
+                    // Draw player score
+                    if (player.score !== undefined) {
+                        ctx.fillText(`${player.score} pts`, drawX + PLAYER_SIZE / 2, drawY - 25);
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
