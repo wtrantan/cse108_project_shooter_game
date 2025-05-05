@@ -43,18 +43,21 @@ const usernames = new Set();
 const gameObjects = {
     trees: [],
     rocks: [],
-    coins: []
+    coins: [],
+    ammoPacks: [] // Add this new array
 };
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
 const BULLET_LIFETIME = 3000; // 3 seconds max bullet lifetime
-
+const MAX_AMMO = 50; // Maximum ammo capacity
+const AMMO_PACK_SIZE = 35; // Amount of ammo in each pack
 function generateGameObjects(mapWidth, mapHeight) {
     // Clear existing objects
     gameObjects.trees = [];
     gameObjects.rocks = [];
     gameObjects.coins = [];
+    gameObjects.ammoPacks = []; 
     
     // Generate trees (20-30)
     const treeCount = Math.floor(Math.random() * 11) + 20;
@@ -88,8 +91,17 @@ function generateGameObjects(mapWidth, mapHeight) {
             collected: false
         });
     }
+    const ammoPackCount = Math.floor(Math.random() * 6) + 5;
+    for (let i = 0; i < ammoPackCount; i++) {
+        gameObjects.ammoPacks.push({
+            id: `ammo-${i}`,
+            x: Math.random() * (mapWidth - 30),
+            y: Math.random() * (mapHeight - 30),
+            collected: false
+        });
+    }
     
-    console.log(`Generated ${treeCount} trees, ${rockCount} rocks, and ${coinCount} coins`);
+    console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${coinCount} coins, and ${ammoPackCount} ammo packs`);
 }
 function updateServerBullets() {
     const currentTime = Date.now();
@@ -387,7 +399,8 @@ io.on('connection', (socket) => {
             x: Math.random() * 800,
             y: Math.random() * 500,
             color: color,
-            score: 0  // Initialize score
+            score: 0,  // Initialize score
+            ammo: 30 // Start with 30 bullets
         };
          // Generate game objects if first player
         if (Object.keys(players).length === 1) {
@@ -412,12 +425,15 @@ io.on('connection', (socket) => {
     });
 });
 socket.on('shoot_bullet', (bulletData) => {
-    if (players[socket.id]) {
+    if (players[socket.id] && players[socket.id].ammo > 0) {
+        // Decrease ammo
+        players[socket.id].ammo--;
+        
         // Validate bullet (starting position should be near the player)
         const player = players[socket.id];
         const bulletX = bulletData.x;
         const bulletY = bulletData.y;
-        const playerCenterX = player.x + 25; // Assuming PLAYER_SIZE is 50
+        const playerCenterX = player.x + 25; 
         const playerCenterY = player.y + 25;
         
         // Calculate distance from bullet start to player center
@@ -441,6 +457,62 @@ socket.on('shoot_bullet', (bulletData) => {
         io.emit('bullets_update', bullets);
     }
 });
+socket.on('collect_ammo', (ammoPackId) => {
+    if (players[socket.id]) {
+        const username = players[socket.id].username;
+        
+        // Find the ammo pack
+        const ammoPackIndex = gameObjects.ammoPacks.findIndex(ap => ap.id === ammoPackId);
+        
+        if (ammoPackIndex !== -1 && !gameObjects.ammoPacks[ammoPackIndex].collected) {
+            // Mark ammo pack as collected
+            gameObjects.ammoPacks[ammoPackIndex].collected = true;
+            
+            // Increase player ammo
+            players[socket.id].ammo = Math.min(players[socket.id].ammo + AMMO_PACK_SIZE, MAX_AMMO);
+            
+            // Broadcast updated game state
+            io.emit('game_state', { players, gameObjects });
+            
+            // Send notification
+            io.emit('chat_message', {
+                username: 'System',
+                message: `${username} collected ammo! Ammo: ${players[socket.id].ammo}`
+            });
+            
+            // Send direct ammo update to the client
+            socket.emit('ammo_update', { ammo: players[socket.id].ammo });
+            
+            // Generate a new ammo pack after some time
+            setTimeout(() => {
+                if (Object.keys(players).length > 0) {  // Only if players still in game
+                    const newAmmoPack = {
+                        id: `ammo-${Date.now()}`,
+                        x: Math.random() * 1970,
+                        y: Math.random() * 1470,
+                        collected: false
+                    };
+                    
+                    // Remove collected ammo pack and add new one
+                    gameObjects.ammoPacks = gameObjects.ammoPacks.filter(a => !a.collected);
+                    gameObjects.ammoPacks.push(newAmmoPack);
+                    
+                    // Broadcast updated game objects
+                    io.emit('game_state', { players, gameObjects });
+                }
+            }, 10000);  // Generate new ammo pack after 10 seconds
+        }
+    }
+});
+
+// Update player ammo
+socket.on('update_ammo', (data) => {
+    if (players[socket.id]) {
+        players[socket.id].ammo = data.ammo;
+    }
+});
+
+
     // Add a new handler for coin collection
 socket.on('collect_coin', (coinId) => {
     if (players[socket.id]) {

@@ -104,6 +104,16 @@
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
     z-index: 99;
 }
+.ammoDisplay {
+    position: absolute;
+    top: 40px;
+    left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+}
         .scoreDisplay {
             position: absolute;
             top: 10px;
@@ -206,6 +216,7 @@
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
         <div class="scoreDisplay" id="scoreDisplay">Score: 0</div>
+        <div class="ammoDisplay" id="ammoDisplay">Ammo: 30/50</div>
         <div class="colorPicker">
             <p>Change your color:</p>
             <input type="color" id="colorPicker" value="#FF0000">
@@ -243,11 +254,16 @@
         let gameObjects = {
             trees: [],
             rocks: [],
-            coins: []
+            coins: [],
+            ammoPacks: []
         };
+        let currentAmmo = 30; // Start with 30 bullets
+        const MAX_AMMO = 50; // Maximum ammo capacity
+        const AMMO_PACK_SIZE = 35; // Amount of ammo in each pack
+        const AMMO_PACK_SIZE_DISPLAY = 30; // Visual size of ammo packs
         let bullets = [];
-    let mouseX = 0;
-    let mouseY = 0;
+        let mouseX = 0;
+        let mouseY = 0;
     const BULLET_SPEED = 10;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
@@ -259,17 +275,19 @@
         
         // Game assets preloading
         const playerSprite = new Image();
-        playerSprite.src = './player-sprite.svg';
+        playerSprite.src = '/player-sprite.png';
         
         const treeSprite = new Image();
-        treeSprite.src = '/tree.svg'; // Create this image or use a placeholder
+        treeSprite.src = '/player-sprite.png'; // Create this image or use a placeholder
         
         const rockSprite = new Image();
-        rockSprite.src = '/rock.png'; // Create this image or use a placeholder
+        rockSprite.src = '/player-sprite.png'; // Create this image or use a placeholder
         
         const coinSprite = new Image();
         coinSprite.src = '/coin.png'; // Create this image or use a placeholder
         
+        const ammoPackSprite = new Image();
+        ammoPackSprite.src = '/ammo-pack.png'; // Create this image or use a placeholder
         // Camera tracking
         let cameraX = 0;
         let cameraY = 0;
@@ -463,19 +481,17 @@
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
             updateLeaderboard();
-        });
+            });
             
 // Add spacebar shooting in handleKeyDown function, or as a separate event listener:
          window.addEventListener('keydown', (e) => {
-            const ammo = 10;
+            
             if (e.code === 'Space' || e.key === ' ') {
             // Check if player has ammo
-            if (ammo > 0) {
-                // Shoot bullet
-                shootBullet();
-            }
+           shootBullet();
         }
         });
+        updateAmmoDisplay();
             // Set up minimap
             setupMinimap();
             
@@ -496,18 +512,26 @@
                     if (playerScore !== players[myId].score) {
                         playerScore = players[myId].score;
                         scoreDisplay.textContent = `Score: ${playerScore}`;
+                        if (currentAmmo !== players[myId].ammo) {
+                     currentAmmo = players[myId].ammo;
+                updateAmmoDisplay();
+                 }
                     }
                 }
                 socket.on('bullets_update', (serverBullets) => {
-    // Add any new bullets from server that aren't in our local array
-    for (const serverBullet of serverBullets) {
-        if (!bullets.some(b => b.id === serverBullet.id)) {
-            bullets.push(serverBullet);
+                // Add any new bullets from server that aren't in our local array
+                for (const serverBullet of serverBullets) {
+             if (!bullets.some(b => b.id === serverBullet.id)) {
+                   bullets.push(serverBullet);
+            }
         }
-    }
+   
 });
-
-socket.on('player_hit', (data) => {
+    socket.on('ammo_update', (data) => {
+    currentAmmo = data.ammo;
+    updateAmmoDisplay();
+    });
+    socket.on('player_hit', (data) => {
     const { playerId, damage, shooterId } = data;
     
     // If this is the player being hit, show visual feedback
@@ -673,7 +697,17 @@ async function deleteAccount() {
                     );
                 }
             });
-            
+            //draw ammo packs as blue dots
+            minimapCtx.fillStyle = '#00f';
+            gameObjects.ammoPacks.forEach(ammoPack => {
+             if (!ammoPack.collected) {
+                minimapCtx.fillRect(
+                    (ammoPack.x / WORLD_WIDTH) * minimapWidth,
+                    (ammoPack.y / WORLD_HEIGHT) * minimapHeight,
+                    3, 3
+                );
+             }
+        });
             // Draw players
             Object.values(players).forEach(player => {
                 minimapCtx.fillStyle = player.color || '#f00';
@@ -750,6 +784,9 @@ async function deleteAccount() {
             newX += PLAYER_SPEED;
             moved = true;
             break;
+            case ' ': // Space
+            shootBullet();
+            break;
     }
     
     // Keep player within world bounds
@@ -766,7 +803,8 @@ async function deleteAccount() {
         
         // Check for coin collection
         checkCoinCollection(player);
-        
+
+        checkAmmoPackCollection(player);
         // Send updated position to server
         socket.emit('move', {
             x: player.x,
@@ -823,11 +861,18 @@ function updateLeaderboard() {
 function shootBullet() {
     if (!myId || !players[myId]) return;
     
+    if (currentAmmo <= 0) {
+        // Play empty gun sound or show message
+        showAmmoWarning();
+        return;
+    }
     // Check cooldown
     const currentTime = Date.now();
     if (currentTime - lastShotTime < BULLET_COOLDOWN) return;
     lastShotTime = currentTime;
-    
+    //Decrease ammo
+    currentAmmo--;
+    updateAmmoDisplay();
     const player = players[myId];
     
     // Calculate bullet starting position (center of player)
@@ -865,7 +910,8 @@ function shootBullet() {
     
     // Send to server
     socket.emit('shoot_bullet', bullet);
-    
+     // Update server about ammo count
+     socket.emit('update_ammo', { ammo: currentAmmo });
     // Play sound effect
     playShootSound();
 }
@@ -876,7 +922,34 @@ function playShootSound() {
     shootSound.volume = 0.2;
     shootSound.play().catch(e => console.log('Audio play failed:', e));
 }
-
+function updateAmmoDisplay() {
+    const ammoDisplay = document.getElementById('ammoDisplay');
+    if (ammoDisplay) {
+        ammoDisplay.textContent = `Ammo: ${currentAmmo}/${MAX_AMMO}`;
+        
+        // Change color based on ammo level
+        if (currentAmmo <= 5) {
+            ammoDisplay.style.color = '#FF0000'; // Red for low ammo
+        } else if (currentAmmo <= 15) {
+            ammoDisplay.style.color = '#FFA500'; // Orange for medium ammo
+        } else {
+            ammoDisplay.style.color = '#000000'; // Black for normal
+        }
+    }
+}
+function showAmmoWarning() {
+    const ammoDisplay = document.getElementById('ammoDisplay');
+    if (ammoDisplay) {
+        // Flash the ammo display
+        ammoDisplay.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+        setTimeout(() => {
+            ammoDisplay.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        }, 300);
+        
+        // Show message in chat
+        addChatMessage('System', 'Out of ammo! Find ammo packs to reload.');
+    }
+}
 // 5. Add bullet update and rendering functions
 function updateBullets(deltaTime) {
     for (let i = bullets.length - 1; i >= 0; i--) {
@@ -995,6 +1068,52 @@ function drawBullets() {
         }
     }
 }
+// Function to draw ammo packs
+function drawAmmoPacks() {
+    ctx.fillStyle = '#00AAFF'; // Blue color for ammo packs
+    
+    gameObjects.ammoPacks.forEach(ammoPack => {
+        if (!ammoPack.collected) {
+            const drawX = ammoPack.x - cameraX;
+            const drawY = ammoPack.y - cameraY;
+            
+            // Only draw if visible on screen
+            if (
+                drawX + AMMO_PACK_SIZE_DISPLAY >= 0 &&
+                drawX <= canvas.width &&
+                drawY + AMMO_PACK_SIZE_DISPLAY >= 0 &&
+                drawY <= canvas.height
+            ) {
+                // Try to draw sprite
+                try {
+                    ctx.drawImage(ammoPackSprite, drawX, drawY, AMMO_PACK_SIZE_DISPLAY, AMMO_PACK_SIZE_DISPLAY);
+                } catch (e) {
+                    // Fallback to colored rectangle with an "A" on it
+                    ctx.fillStyle = '#0088CC';
+                    ctx.fillRect(drawX, drawY, AMMO_PACK_SIZE_DISPLAY, AMMO_PACK_SIZE_DISPLAY);
+                    
+                    // Draw a white "A" on the ammo pack
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('A', drawX + AMMO_PACK_SIZE_DISPLAY/2, drawY + AMMO_PACK_SIZE_DISPLAY/2 + 7);
+                    
+                    // Reset fill style
+                    ctx.fillStyle = '#00AAFF';
+                }
+                
+                // Animate ammo pack bob up and down (similar to coins)
+                ammoPack.bobOffset = ammoPack.bobOffset || 0;
+                ammoPack.bobDirection = ammoPack.bobDirection || 1;
+                ammoPack.bobOffset += 0.05 * ammoPack.bobDirection;
+                
+                if (ammoPack.bobOffset > 5 || ammoPack.bobOffset < 0) {
+                    ammoPack.bobDirection *= -1;
+                }
+            }
+        }
+    });
+}
 function flashScreen(color) {
     // Create overlay div
     const flash = document.createElement('div');
@@ -1063,6 +1182,47 @@ function playHitConfirmSound() {
                 }
             });
         }
+        function checkAmmoPackCollection(player) {
+    // Define player hitbox
+    const playerHitbox = {
+        x: player.x + 10,
+        y: player.y + 10,
+        width: PLAYER_SIZE - 20,
+        height: PLAYER_SIZE - 20
+    };
+    
+    // Check collision with each ammo pack
+    gameObjects.ammoPacks.forEach(ammoPack => {
+        if (!ammoPack.collected) {
+            // Define ammo pack hitbox
+            const ammoPackHitbox = {
+                x: ammoPack.x + 5,
+                y: ammoPack.y + 5,
+                width: AMMO_PACK_SIZE_DISPLAY - 10,
+                height: AMMO_PACK_SIZE_DISPLAY - 10
+            };
+            
+            // Check hitbox overlap
+            if (
+                playerHitbox.x < ammoPackHitbox.x + ammoPackHitbox.width &&
+                playerHitbox.x + playerHitbox.width > ammoPackHitbox.x &&
+                playerHitbox.y < ammoPackHitbox.y + ammoPackHitbox.height &&
+                playerHitbox.y + playerHitbox.height > ammoPackHitbox.y
+            ) {
+                // Collect the ammo pack (server will validate)
+                socket.emit('collect_ammo', ammoPack.id);
+                
+                // Play ammo collection sound
+                playAmmoSound();
+            }
+        }
+    });
+}
+function playAmmoSound() {
+    const ammoSound = new Audio('/ammo-sound.mp3'); // Create this sound or use a placeholder
+    ammoSound.volume = 0.3;
+    ammoSound.play().catch(e => console.log('Audio play failed:', e));
+}
         function checkCollision(player, newX, newY) {
     // Define player hitbox with some padding for better gameplay
     const playerHitbox = {
@@ -1178,6 +1338,9 @@ function playHitConfirmSound() {
             // Draw coins
             drawCoins();
             
+             // Draw ammo packs
+            drawAmmoPacks();
+
             // Draw all players
             drawPlayers();
             
