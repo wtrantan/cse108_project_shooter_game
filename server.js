@@ -372,7 +372,7 @@ app.post('/api/update-color', async (req, res) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
-    
+   
     // Handle player login via socket (after REST authentication)
     socket.on('join_game', (userData) => {
         const { username, color } = userData;
@@ -413,7 +413,16 @@ io.on('connection', (socket) => {
         }
         // Send success response
         socket.emit('join_success', socket.id);
+        socket.on('bullet_removed', (bulletId) => {
+    // Find and remove the bullet from the server's bullet array
+    const bulletIndex = bullets.findIndex(b => b.id === bulletId);
+    if (bulletIndex !== -1) {
+        bullets.splice(bulletIndex, 1);
         
+        // Broadcast the updated bullets to all clients
+        io.emit('bullets_update', bullets);
+    }
+});
         // Broadcast updated game state to all players
         io.emit('game_state', { players, gameObjects });
         
