@@ -372,7 +372,7 @@ app.post('/api/update-color', async (req, res) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
-   
+    
     // Handle player login via socket (after REST authentication)
     socket.on('join_game', (userData) => {
         const { username, color } = userData;
@@ -413,16 +413,7 @@ io.on('connection', (socket) => {
         }
         // Send success response
         socket.emit('join_success', socket.id);
-        socket.on('bullet_removed', (bulletId) => {
-    // Find and remove the bullet from the server's bullet array
-    const bulletIndex = bullets.findIndex(b => b.id === bulletId);
-    if (bulletIndex !== -1) {
-        bullets.splice(bulletIndex, 1);
         
-        // Broadcast the updated bullets to all clients
-        io.emit('bullets_update', bullets);
-    }
-});
         // Broadcast updated game state to all players
         io.emit('game_state', { players, gameObjects });
         
@@ -575,26 +566,40 @@ socket.on('collect_coin', (coinId) => {
 });
     // Handle player movement
     socket.on('move', (position) => {
-        if (players[socket.id]) {
-            // Keep player within world bounds
-            if (position.x < 0) position.x = 0;
-            if (position.y < 0) position.y = 0;
-            if (position.x > 2000 - 50) position.x = 2000 - 50; // WORLD_WIDTH - PLAYER_SIZE
-            if (position.y > 1500 - 50) position.y = 1500 - 50; // WORLD_HEIGHT - PLAYER_SIZE
+    if (players[socket.id]) {
+        // Keep player within world bounds
+        if (position.x < 0) position.x = 0;
+        if (position.y < 0) position.y = 0;
+        if (position.x > 2000 - 50) position.x = 2000 - 50; // WORLD_WIDTH - PLAYER_SIZE
+        if (position.y > 1500 - 50) position.y = 1500 - 50; // WORLD_HEIGHT - PLAYER_SIZE
+        
+        // Get the input sequence number from client
+        const sequence = position.sequence;
+        
+        // Validate server-side that there's no collision
+        if (!checkServerCollision(socket.id, position)) {
+            players[socket.id].x = position.x;
+            players[socket.id].y = position.y;
             
-            // Validate server-side that there's no collision
-            if (!checkServerCollision(socket.id, position)) {
-                players[socket.id].x = position.x;
-                players[socket.id].y = position.y;
-                
-                // Broadcast updated game state
-                io.emit('game_state', { players });
-            } else {
-                // If collision detected, send the original position back to the client
-                socket.emit('game_state', { players });
+            // Store the last processed sequence number
+            if (sequence !== undefined) {
+                players[socket.id].lastProcessedSequence = sequence;
             }
+            
+            // Broadcast updated game state to all players
+            io.emit('game_state', { 
+                players, 
+                sequence: players[socket.id].lastProcessedSequence 
+            });
+        } else {
+            // If collision detected, send the original position back to the client
+            socket.emit('game_state', { 
+                players,
+                sequence: players[socket.id].lastProcessedSequence 
+            });
         }
-    });
+    }
+});
     
     // Handle color change
     socket.on('change_color', (colorData) => {

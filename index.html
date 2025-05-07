@@ -270,6 +270,10 @@
     left: false,
     right: false
 };
+const inputBuffer = [];
+const MAX_BUFFER_SIZE = 10;
+let lastInputTime = 0;
+const INPUT_SEND_INTERVAL = 50; // ms
 let lastMovementUpdate = 0;
 const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
     const BULLET_SPEED = 10;
@@ -510,8 +514,30 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
             
             // Listen for server updates
             socket.on('game_state', (gameState) => {
+                let prevPosition = null;
+    if (myId && players[myId]) {
+        prevPosition = {
+            x: players[myId].x,
+            y: players[myId].y
+        };
+    }
                 players = gameState.players;
                 
+
+                if (prevPosition && myId && players[myId]) {
+        const serverPos = players[myId];
+        const distX = serverPos.x - prevPosition.x;
+        const distY = serverPos.y - prevPosition.y;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+        
+        // Only reconcile if server and client positions differ significantly
+        if (distance > 10) {
+            // Smoothly move to the correct position over a few frames
+            const reconciliationSpeed = 0.3; // Adjust as needed
+            players[myId].x = prevPosition.x + distX * reconciliationSpeed;
+            players[myId].y = prevPosition.y + distY * reconciliationSpeed;
+        }
+    }
                 // Update game objects if available
                 if (gameState.gameObjects) {
                     gameObjects = gameState.gameObjects;
@@ -767,38 +793,76 @@ async function deleteAccount() {
         
         function handleKeyDown(e) {
     updateKeyState(e, true);
+    if (input) addToInputBuffer(input);
 }
 
 function handleKeyUp(e) {
     updateKeyState(e, false);
+    if (input) addToInputBuffer(input);
 }
 
 function updateKeyState(e, isPressed) {
+    let input = null;
     switch(e.key) {
         case 'ArrowUp':
         case 'w':
             keys.up = isPressed;
+            input = { type: 'move', key: 'up', pressed: isPressed };
             break;
         case 'ArrowDown':
         case 's':
             keys.down = isPressed;
+            input = { type: 'move', key: 'down', pressed: isPressed };
             break;
         case 'ArrowLeft':
         case 'a':
             keys.left = isPressed;
+            input = { type: 'move', key: 'left', pressed: isPressed };
             break;
         case 'ArrowRight':
         case 'd':
             keys.right = isPressed;
+            input = { type: 'move', key: 'right', pressed: isPressed };
             break;
         case ' ': // Space
             if (isPressed) {
                 shootBullet();
+                input = { type: 'shoot' };
             }
             break;
     }
+    
+    return input;
 }
-
+function addToInputBuffer(input) {
+    input.timestamp = Date.now();
+    input.sequence = inputBuffer.length > 0 ? 
+                    inputBuffer[inputBuffer.length - 1].sequence + 1 : 0;
+    
+    inputBuffer.push(input);
+    
+    // Keep buffer size limited
+    if (inputBuffer.length > MAX_BUFFER_SIZE) {
+        inputBuffer.shift();
+    }
+    
+    // Process and send inputs
+    processInputBuffer();
+}
+function processInputBuffer() {
+    const now = Date.now();
+    
+    // Only send updates at a fixed interval
+    if (now - lastInputTime >= INPUT_SEND_INTERVAL && inputBuffer.length > 0) {
+        lastInputTime = now;
+        
+        // Send all buffered inputs at once
+        socket.emit('player_inputs', inputBuffer);
+        
+        // Clear buffer after sending
+        // inputBuffer.length = 0; // Uncomment if you want to clear after sending
+    }
+}
 function updateLeaderboard() {
     const leaderboardContent = document.getElementById('leaderboardContent');
     if (!leaderboardContent) return;
