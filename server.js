@@ -49,9 +49,9 @@ const gameObjects = {
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
-const BULLET_LIFETIME = 3000; // 3 seconds max bullet lifetime
-const MAX_AMMO = 50; // Maximum ammo capacity
-const AMMO_PACK_SIZE = 35; // Amount of ammo in each pack
+const BULLET_LIFETIME = 1000; // 1 seconds max bullet lifetime
+const MAX_AMMO = 10; // Maximum ammo capacity
+const AMMO_PACK_SIZE = 5 // Amount of ammo in each pack
 function generateGameObjects(mapWidth, mapHeight) {
     // Clear existing objects
     gameObjects.trees = [];
