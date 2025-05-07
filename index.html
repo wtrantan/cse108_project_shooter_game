@@ -270,6 +270,8 @@
     left: false,
     right: false
 };
+let lastMovementUpdate = 0;
+const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
     const BULLET_SPEED = 10;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
@@ -1417,7 +1419,7 @@ function playAmmoSound() {
         moved = true;
     }
     
-    // If diagonal movement, normalize speed to avoid moving faster diagonally
+    // If diagonal movement, normalize speed
     if ((keys.up || keys.down) && (keys.left || keys.right)) {
         const diagonalSpeed = PLAYER_SPEED / Math.sqrt(2);
         if (keys.up) newY = player.y - diagonalSpeed;
@@ -1434,19 +1436,23 @@ function playAmmoSound() {
     
     // Check for collision with obstacles
     if (moved && !checkCollision(player, newX, newY)) {
-        // Update player position only if no collision
-        player.x = newX;
-        player.y = newY;
+        // Apply movement locally first (client-side prediction)
+        players[myId].x = newX;
+        players[myId].y = newY;
         
         // Check for coin and ammo pack collection
         checkCoinCollection(player);
         checkAmmoPackCollection(player);
         
         // Send updated position to server
-        socket.emit('move', {
-            x: player.x,
-            y: player.y
-        });
+        const now = Date.now();
+        if (now - lastMovementUpdate >= MOVEMENT_UPDATE_INTERVAL) {
+            lastMovementUpdate = now;
+            socket.emit('move', {
+                x: newX,
+                y: newY
+            });
+        }
     }
 }
         function drawClouds() {
