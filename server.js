@@ -31,12 +31,44 @@ db.serialize(() => {
             color TEXT DEFAULT '#FF0000',
             score INTEGER DEFAULT 0,
             last_login TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            is_admin INTEGER DEFAULT 0
         )
     `);
     console.log('Database initialized');
 });
+function ensureAdminExists() {
+    const adminUsername = 'admin';
+    const adminPassword = 'admin123'; // You should change this to a secure password
+    
+    db.get('SELECT * FROM users WHERE username = ?', [adminUsername], async (err, row) => {
+        if (err) {
+            console.error('Error checking for admin user:', err);
+            return;
+        }
+        
+        if (!row) {
+            // Admin doesn't exist, create it
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(adminPassword, saltRounds);
+            
+            db.run(
+                'INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)',
+                [adminUsername, hashedPassword, 1],
+                function(err) {
+                    if (err) {
+                        console.error('Failed to create admin user:', err);
+                        return;
+                    }
+                    console.log('Admin user created successfully');
+                }
+            );
+        }
+    });
+}
 
+// Call this function after initializing the database
+ensureAdminExists();
 // Game state
 const players = {};
 const usernames = new Set();
@@ -161,6 +193,8 @@ function updateServerBullets() {
     // If bullets were updated, broadcast the updated list
     io.emit('bullets_update', bullets);
 }
+
+
 // Serve the main page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -368,6 +402,227 @@ app.post('/api/update-color', async (req, res) => {
         console.error('Delete account error:', error);
         res.status(500).json({ error: 'Server error' });
     }
+});
+
+
+
+// Admin login route
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        // Validate input
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+        
+        // Find user
+        db.get('SELECT * FROM users WHERE username = ? AND is_admin = 1', [username], async (err, user) => {
+            if (err) {
+                return res.status(500).json({ error: 'Database error' });
+            }
+            
+            if (!user) {
+                return res.status(401).json({ error: 'Invalid admin credentials' });
+            }
+            
+            // Check password
+            const passwordMatch = await bcrypt.compare(password, user.password);
+            
+            if (!passwordMatch) {
+                return res.status(401).json({ error: 'Invalid admin credentials' });
+            }
+            
+            // Return success with admin token
+            // In a real app, you would use JWT or another secure token method
+            const adminToken = require('crypto').randomBytes(64).toString('hex');
+            
+            // Store the token (in-memory for simplicity - in production use Redis or similar)
+            app.locals.adminToken = adminToken;
+            
+            return res.status(200).json({
+                message: 'Admin login successful',
+                token: adminToken
+            });
+        });
+    } catch (error) {
+        console.error('Admin login error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Middleware to verify admin token
+function verifyAdminToken(req, res, next) {
+    const token = req.headers['x-admin-token'];
+    
+    if (!token || token !== app.locals.adminToken) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    next();
+}
+
+// Get all users
+app.get('/api/admin/users', verifyAdminToken, (req, res) => {
+    db.all('SELECT id, username, color, score, last_login, created_at, is_admin FROM users', [], (err, users) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.status(200).json({ users });
+    });
+});
+
+// Search users
+app.get('/api/admin/users/search', verifyAdminToken, (req, res) => {
+    const { query } = req.query;
+    
+    if (!query) {
+        return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    db.all(
+        'SELECT id, username, color, score, last_login, created_at, is_admin FROM users WHERE username LIKE ?',
+        [`%${query}%`],
+        (err, users) => {
+            if (err) {
+                return res.status(500).json({ error: 'Database error' });
+            }
+            
+            res.status(200).json({ users });
+        }
+    );
+});
+
+// Edit user
+app.put('/api/admin/users/:id', verifyAdminToken, async (req, res) => {
+    const userId = req.params.id;
+    const { username, password, color, score } = req.body;
+    
+    try {
+        // Start building the update query
+        let query = 'UPDATE users SET ';
+        const params = [];
+        
+        // Add fields to update
+        if (username) {
+            query += 'username = ?, ';
+            params.push(username);
+        }
+        
+        if (password) {
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(password, saltRounds);
+            query += 'password = ?, ';
+            params.push(hashedPassword);
+        }
+        
+        if (color) {
+            query += 'color = ?, ';
+            params.push(color);
+        }
+        
+        if (score !== undefined) {
+            query += 'score = ?, ';
+            params.push(score);
+        }
+        
+        // Remove trailing comma and space
+        query = query.slice(0, -2);
+        
+        // Add WHERE clause
+        query += ' WHERE id = ?';
+        params.push(userId);
+        
+        // Execute query
+        db.run(query, params, function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Failed to update user' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            res.status(200).json({ message: 'User updated successfully' });
+        });
+    } catch (error) {
+        console.error('Edit user error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Delete user
+app.delete('/api/admin/users/:id', verifyAdminToken, (req, res) => {
+    const userId = req.params.id;
+    
+    db.get('SELECT username, is_admin FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Prevent deleting the only admin
+        if (user.is_admin) {
+            db.get('SELECT COUNT(*) as count FROM users WHERE is_admin = 1', [], (err, result) => {
+                if (err) {
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                
+                if (result.count <= 1) {
+                    return res.status(400).json({ error: 'Cannot delete the only admin user' });
+                }
+                
+                // If there are other admins, proceed with deletion
+                deleteUser(userId, user.username, res);
+            });
+        } else {
+            // Non-admin user can be deleted directly
+            deleteUser(userId, user.username, res);
+        }
+    });
+});
+
+function deleteUser(userId, username, res) {
+    db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to delete user' });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Find and remove the player from the game
+        const socketId = Object.keys(players).find(
+            key => players[key].username === username
+        );
+        
+        if (socketId) {
+            // Remove player from active game
+            usernames.delete(username);
+            delete players[socketId];
+            
+            // Broadcast updated game state
+            io.emit('game_state', { players });
+            
+            // System message
+            io.emit('chat_message', {
+                username: 'System',
+                message: `${username} has been removed by an admin.`
+            });
+        }
+        
+        res.status(200).json({ message: 'User deleted successfully' });
+    });
+}
+
+// Serve the admin page
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
 });
 // Socket.IO connection handling
 io.on('connection', (socket) => {
