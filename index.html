@@ -227,6 +227,10 @@
         </div>
         <div class="minimap" id="minimap"></div>
         <div id="chatBox">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <button id="toggleChatButton">Hide Chat</button>
+                <span style="font-weight: bold;">Chat</span>
+            </div>
             <div id="chatMessages"></div>
             <div>
                 <input type="text" id="chatInput" placeholder="Type your message...">
@@ -243,7 +247,7 @@
     <script>
         // Connect to the server
         const socket = io();
-        
+        let chatInputFocused = false;
         // Game variables
         let canvas, ctx;
         let username = "";
@@ -390,7 +394,26 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
                 registerError.textContent = 'Server error. Please try again later.';
             }
         }
-        
+        function toggleChat() {
+    const chatBox = document.getElementById('chatBox');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const toggleButton = document.getElementById('toggleChatButton');
+    
+    if (chatMessages.style.display === 'none') {
+        // Show chat
+        chatMessages.style.display = 'block';
+        chatInput.style.display = 'inline-block';
+        document.getElementById('sendButton').style.display = 'inline-block';
+        toggleButton.textContent = 'Hide Chat';
+    } else {
+        // Hide chat
+        chatMessages.style.display = 'none';
+        chatInput.style.display = 'none';
+        document.getElementById('sendButton').style.display = 'none';
+        toggleButton.textContent = 'Show Chat';
+    }
+}
         // Login handling
         document.getElementById('loginButton').addEventListener('click', login);
         document.getElementById('loginUsername').addEventListener('keypress', (e) => {
@@ -481,7 +504,22 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
             document.getElementById('chatInput').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
             });
-            
+            document.getElementById('chatInput').addEventListener('focus', () => {
+    chatInputFocused = true;
+    
+    // Reset key states when focusing the chat input
+    keys.up = false;
+    keys.down = false;
+    keys.left = false;
+    keys.right = false;
+});
+
+document.getElementById('chatInput').addEventListener('blur', () => {
+    chatInputFocused = false;
+});
+
+// Set up toggle chat button
+document.getElementById('toggleChatButton').addEventListener('click', toggleChat);
             // Set up color picker
             document.getElementById('applyColorButton').addEventListener('click', changeColor);
             
@@ -792,11 +830,17 @@ async function deleteAccount() {
         }
         
         function handleKeyDown(e) {
+            if (chatInputFocused && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', ' '].includes(e.key)) {
+        return;
+    }
             const input = updateKeyState(e, true);
     if (input) addToInputBuffer(input);
 }
 
 function handleKeyUp(e) {
+    if (chatInputFocused && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', ' '].includes(e.key)) {
+        return;
+    }
     const input = updateKeyState(e, false);
     if (input) addToInputBuffer(input);
 }
@@ -910,7 +954,7 @@ function updateLeaderboard() {
     });
 }
 function shootBullet() {
-    if (!myId || !players[myId]) return;
+    if (!myId || !players[myId] || chatInputFocused) return;
     
     if (currentAmmo <= 0) {
         // Play empty gun sound or show message
@@ -1648,39 +1692,84 @@ function playAmmoSound() {
         }
     }
 }
-        function drawClouds() {
-            // Simple cloud drawing
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+function drawClouds() {
+    // Cloud settings
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    
+    // Use time to animate clouds
+    const time = Date.now() * 0.0002;
+    
+    // Create fewer clouds with larger minimum size
+    // and make them move horizontally
+    const cloudSpacingX = 800; // Increased spacing (fewer clouds)
+    const cloudSpacingY = 500; // Increased vertical spacing
+    
+    // Determine visible area based on camera position
+    const visibleLeft = cameraX;
+    const visibleRight = cameraX + canvas.width;
+    const visibleTop = cameraY;
+    const visibleBottom = cameraY + canvas.height;
+    
+    // Generate clouds in the visible area (with buffer for smooth scrolling)
+    for (let baseY = Math.floor(visibleTop / cloudSpacingY) * cloudSpacingY - cloudSpacingY; 
+         baseY <= visibleBottom + cloudSpacingY; 
+         baseY += cloudSpacingY) {
+        
+        // For each row, create fewer clouds
+        for (let i = 0; i < 3; i++) {
+            // Create a cloud with consistent movement based on position
+            const seed = baseY * 0.1 + i * 1000;
+            const random = Math.abs(Math.sin(seed)) * 10000 % 1;
             
-            // Create a few static clouds
-            const clouds = [
-                { x: 100, y: 100, size: 100 },
-                { x: 500, y: 150, size: 120 },
-                { x: 900, y: 80, size: 90 },
-                { x: 1300, y: 200, size: 110 },
-                { x: 1700, y: 120, size: 130 }
-            ];
+            // Calculate base position
+            let baseX = (i * cloudSpacingX) + (random * cloudSpacingX);
             
-            clouds.forEach(cloud => {
-                const drawX = cloud.x - cameraX;
-                const drawY = cloud.y - cameraY;
+            // Apply horizontal movement based on time
+            // Different rows move at different speeds and directions
+            const speedFactor = (baseY % 3 === 0) ? 1 : ((baseY % 3 === 1) ? -0.7 : 0.5);
+            const movement = time * 100 * speedFactor;
+            
+            // Wrap around the world width
+            baseX = (baseX + movement) % (WORLD_WIDTH + cloudSpacingX);
+            if (baseX < -cloudSpacingX) baseX += WORLD_WIDTH + cloudSpacingX;
+            
+            // Determine cloud size (larger minimum size)
+            const minSize = 120; // Increased minimum size
+            const maxSize = 200;
+            const sizeVariation = Math.max(0.5, 1 - (baseY / WORLD_HEIGHT));
+            const cloudSize = minSize + (maxSize - minSize) * sizeVariation * random;
+            
+            const drawX = baseX - cameraX;
+            const drawY = baseY - cameraY;
+            
+            // Only draw if potentially visible
+            if (drawX + cloudSize >= -200 && 
+                drawX <= canvas.width + 200 && 
+                drawY + cloudSize >= -200 && 
+                drawY <= canvas.height + 200) {
                 
-                // Only draw if visible on screen
-                if (
-                    drawX + cloud.size >= 0 &&
-                    drawX <= canvas.width &&
-                    drawY + cloud.size >= 0 &&
-                    drawY <= canvas.height
-                ) {
-                    // Draw simple cloud (3 circles)
-                    ctx.beginPath();
-                    ctx.arc(drawX, drawY, cloud.size * 0.5, 0, Math.PI * 2);
-                    ctx.arc(drawX + cloud.size * 0.4, drawY - cloud.size * 0.1, cloud.size * 0.4, 0, Math.PI * 2);
-                    ctx.arc(drawX + cloud.size * 0.4, drawY + cloud.size * 0.1, cloud.size * 0.4, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
+                // Draw cloud with MORE overlapping circles to avoid triangle gaps
+                ctx.beginPath();
+                
+                // Main center circle
+                ctx.arc(drawX, drawY, cloudSize * 0.5, 0, Math.PI * 2);
+                
+                // Additional circles to create fuller shape without gaps
+                ctx.arc(drawX + cloudSize * 0.4, drawY - cloudSize * 0.1, cloudSize * 0.45, 0, Math.PI * 2);
+                ctx.arc(drawX - cloudSize * 0.3, drawY, cloudSize * 0.4, 0, Math.PI * 2);
+                ctx.arc(drawX + cloudSize * 0.1, drawY + cloudSize * 0.1, cloudSize * 0.35, 0, Math.PI * 2);
+                
+                // Add more circles to fill gaps
+                ctx.arc(drawX - cloudSize * 0.15, drawY - cloudSize * 0.15, cloudSize * 0.35, 0, Math.PI * 2);
+                ctx.arc(drawX + cloudSize * 0.25, drawY + cloudSize * 0.05, cloudSize * 0.3, 0, Math.PI * 2);
+                ctx.arc(drawX - cloudSize * 0.1, drawY + cloudSize * 0.2, cloudSize * 0.25, 0, Math.PI * 2);
+                
+                // Fill the entire shape
+                ctx.fill();
+            }
         }
+    }
+}
         
       function drawGameObjects(objects, sprite, fallbackColor) {
     objects.forEach(obj => {
@@ -1819,5 +1908,6 @@ function playAmmoSound() {
      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 12px; opacity: 0.5;">
         <a href="/admin" target="_blank">Admin</a>
     </div>
+    
 </body>
 </html>
