@@ -35,6 +35,18 @@ db.serialize(() => {
             is_admin INTEGER DEFAULT 0
         )
     `);
+    db.run(`
+        CREATE TABLE IF NOT EXISTS fish (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            size REAL NOT NULL,
+            rarity TEXT NOT NULL,
+            caught_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    `);
     console.log('Database initialized');
 });
 function ensureAdminExists() {
@@ -76,8 +88,91 @@ const gameObjects = {
     trees: [],
     rocks: [],
     coins: [],
-    ammoPacks: [] // Add this new array
+    ammoPacks: [], // Add this new array
+    ponds: [] // New ponds array
 };
+const fishTypes = [
+    {
+        id: 1,
+        name: "Common Carp",
+        minSize: 20,
+        maxSize: 45,
+        rarity: "Common",
+        chance: 0.25 // 25% chance
+    },
+    {
+        id: 2,
+        name: "Sunfish",
+        minSize: 10,
+        maxSize: 20,
+        rarity: "Common",
+        chance: 0.20 // 20% chance
+    },
+    {
+        id: 3,
+        name: "Catfish",
+        minSize: 25,
+        maxSize: 60,
+        rarity: "Uncommon",
+        chance: 0.15 // 15% chance
+    },
+    {
+        id: 4,
+        name: "Bass",
+        minSize: 20,
+        maxSize: 40,
+        rarity: "Uncommon",
+        chance: 0.15 // 15% chance
+    },
+    {
+        id: 5,
+        name: "Rainbow Trout",
+        minSize: 15,
+        maxSize: 35,
+        rarity: "Uncommon",
+        chance: 0.10 // 10% chance
+    },
+    {
+        id: 6,
+        name: "Pike",
+        minSize: 40,
+        maxSize: 80,
+        rarity: "Rare",
+        chance: 0.07 // 7% chance
+    },
+    {
+        id: 7,
+        name: "Salmon",
+        minSize: 30,
+        maxSize: 70,
+        rarity: "Rare",
+        chance: 0.05 // 5% chance
+    },
+    {
+        id: 8,
+        name: "Golden Perch",
+        minSize: 25,
+        maxSize: 50,
+        rarity: "Epic",
+        chance: 0.02 // 2% chance
+    },
+    {
+        id: 9,
+        name: "Sturgeon",
+        minSize: 60,
+        maxSize: 120,
+        rarity: "Epic",
+        chance: 0.007 // 0.7% chance
+    },
+    {
+        id: 10,
+        name: "Mythical Koi",
+        minSize: 50,
+        maxSize: 100,
+        rarity: "Legendary",
+        chance: 0.003 // 0.3% chance
+    }
+];
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
@@ -90,6 +185,7 @@ function generateGameObjects(mapWidth, mapHeight) {
     gameObjects.rocks = [];
     gameObjects.coins = [];
     gameObjects.ammoPacks = []; 
+    gameObjects.ponds = [];
     
     // Generate trees (20-30)
     const treeCount = Math.floor(Math.random() * 11) + 20;
@@ -112,6 +208,67 @@ function generateGameObjects(mapWidth, mapHeight) {
             size: Math.floor(Math.random() * 20) + 40  // Random size between 40-60
         });
     }
+
+    const pondCount =1;
+    for (let i = 0; i < pondCount; i++) {
+        // Make ponds different sizes
+        const pondWidth = Math.floor(Math.random() * 150) + 200; // 200-350
+        const pondHeight = Math.floor(Math.random() * 100) + 150; // 150-250
+        
+        // Find a location that doesn't overlap with trees or rocks
+        let validLocation = false;
+        let pondX, pondY;
+        let attempts = 0;
+        
+        while (!validLocation && attempts < 50) {
+            attempts++;
+            pondX = Math.random() * (mapWidth - pondWidth);
+            pondY = Math.random() * (mapHeight - pondHeight);
+            
+            // Check for overlap with trees and rocks
+            let overlap = false;
+            
+            // Simple overlap check - could be improved for production
+            for (const tree of gameObjects.trees) {
+                if (
+                    pondX < tree.x + tree.size &&
+                    pondX + pondWidth > tree.x &&
+                    pondY < tree.y + tree.size &&
+                    pondY + pondHeight > tree.y
+                ) {
+                    overlap = true;
+                    break;
+                }
+            }
+            
+            if (!overlap) {
+                for (const rock of gameObjects.rocks) {
+                    if (
+                        pondX < rock.x + rock.size &&
+                        pondX + pondWidth > rock.x &&
+                        pondY < rock.y + rock.size &&
+                        pondY + pondHeight > rock.y
+                    ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            validLocation = !overlap;
+        }
+        
+        // Add the pond
+        if (validLocation) {
+            gameObjects.ponds.push({
+                id: `pond-${i}`,
+                x: pondX,
+                y: pondY,
+                width: pondWidth,
+                height: pondHeight
+            });
+        }
+    }
     
     // Generate coins (10-15)
     const coinCount = Math.floor(Math.random() * 6) + 10;
@@ -133,7 +290,7 @@ function generateGameObjects(mapWidth, mapHeight) {
         });
     }
     
-    console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${coinCount} coins, and ${ammoPackCount} ammo packs`);
+    console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${coinCount} coins, and ${ammoPackCount} ammo packs`);
 }
 function updateServerBullets() {
     const currentTime = Date.now();
@@ -403,7 +560,44 @@ app.post('/api/update-color', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-
+app.post('/api/delete-fish', async (req, res) => {
+    try {
+        const { username, fishId } = req.body;
+        
+        if (!username || !fishId) {
+            return res.status(400).json({ error: 'Username and fish ID are required' });
+        }
+        
+        // Get user ID from username
+        db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+            if (err || !user) {
+                return res.status(401).json({ error: 'User not found' });
+            }
+            
+            // Delete the fish record
+            db.run('DELETE FROM fish WHERE id = ? AND user_id = ?', 
+                [fishId, user.id], 
+                function(err) {
+                    if (err) {
+                        return res.status(500).json({ error: 'Failed to delete fish' });
+                    }
+                    
+                    if (this.changes === 0) {
+                        return res.status(404).json({ error: 'Fish not found or does not belong to you' });
+                    }
+                    
+                    return res.status(200).json({ 
+                        message: 'Fish deleted successfully',
+                        fishId: fishId
+                    });
+                }
+            );
+        });
+    } catch (error) {
+        console.error('Delete fish error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
 
 // Admin login route
@@ -586,6 +780,126 @@ app.delete('/api/admin/users/:id', verifyAdminToken, (req, res) => {
     });
 });
 
+app.get('/api/admin/fish', verifyAdminToken, (req, res) => {
+    db.all(`
+        SELECT f.id, f.type_id, f.name, f.size, f.rarity, f.caught_at, 
+               u.username, u.id as user_id
+        FROM fish f
+        JOIN users u ON f.user_id = u.id
+        ORDER BY f.caught_at DESC
+    `, [], (err, fishes) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.status(200).json({ fishes });
+    });
+});
+
+// Get fish statistics
+app.get('/api/admin/fish/stats', verifyAdminToken, (req, res) => {
+    // Get total counts by rarity
+    db.all(`
+        SELECT rarity, COUNT(*) as count
+        FROM fish
+        GROUP BY rarity
+    `, [], (err, rarityCounts) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Get total counts by type
+        db.all(`
+            SELECT type_id, name, COUNT(*) as count
+            FROM fish
+            GROUP BY type_id
+        `, [], (err, typeCounts) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            
+            // Get top fishers
+            db.all(`
+                SELECT u.username, COUNT(*) as fish_count, 
+                       MAX(f.size) as largest_fish,
+                       COUNT(DISTINCT f.type_id) as unique_types
+                FROM fish f
+                JOIN users u ON f.user_id = u.id
+                GROUP BY f.user_id
+                ORDER BY fish_count DESC
+                LIMIT 10
+            `, [], (err, topFishers) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                
+                // Get recent catches
+                db.all(`
+                    SELECT f.id, f.type_id, f.name, f.size, f.rarity, f.caught_at,
+                           u.username
+                    FROM fish f
+                    JOIN users u ON f.user_id = u.id
+                    ORDER BY f.caught_at DESC
+                    LIMIT 10
+                `, [], (err, recentCatches) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        return res.status(500).json({ error: 'Database error' });
+                    }
+                    
+                    res.status(200).json({
+                        rarityCounts,
+                        typeCounts,
+                        topFishers,
+                        recentCatches
+                    });
+                });
+            });
+        });
+    });
+});
+
+// Get fish for a specific user
+app.get('/api/admin/users/:userId/fish', verifyAdminToken, (req, res) => {
+    const userId = req.params.userId;
+    
+    db.all(`
+        SELECT f.id, f.type_id, f.name, f.size, f.rarity, f.caught_at
+        FROM fish f
+        WHERE f.user_id = ?
+        ORDER BY f.caught_at DESC
+    `, [userId], (err, fishes) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.status(200).json({ fishes });
+    });
+});
+
+// Delete a fish
+app.delete('/api/admin/fish/:id', verifyAdminToken, (req, res) => {
+    const fishId = req.params.id;
+    
+    db.run('DELETE FROM fish WHERE id = ?', [fishId], function(err) {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Failed to delete fish' });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Fish not found' });
+        }
+        
+        res.status(200).json({ message: 'Fish deleted successfully' });
+    });
+});
+
 function deleteUser(userId, username, res) {
     db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
         if (err) {
@@ -678,6 +992,188 @@ io.on('connection', (socket) => {
             message: `${username} has joined the lobby!`
         });
     });
+});
+socket.on('catch_fish', () => {
+    if (players[socket.id]) {
+        const player = players[socket.id];
+        
+        // Check if player is near water (simple implementation)
+        let nearWater = false;
+        const playerCenter = {
+            x: player.x + 25, // Half of PLAYER_SIZE
+            y: player.y + 25
+        };
+        
+        for (const pond of gameObjects.ponds) {
+            // Check if player is in ellipse of pond
+            const dx = (playerCenter.x - (pond.x + pond.width/2)) / (pond.width/2);
+            const dy = (playerCenter.y - (pond.y + pond.height/2)) / (pond.height/2);
+            
+            if (dx*dx + dy*dy <= 1) {
+                nearWater = true;
+                break;
+            }
+        }
+        
+        if (nearWater) {
+            // Determine which fish is caught based on rarity chances
+            const caughtFish = determineCaughtFish();
+            
+            // Store fish in database
+            storeFishInDatabase(player.username, caughtFish, (err, fishId) => {
+                if (err) {
+                    console.error('Error storing fish:', err);
+                    return;
+                }
+                
+                // Include database ID with the fish data
+                caughtFish.id = fishId;
+                
+                // Send the caught fish to the player
+                socket.emit('fish_caught', caughtFish);
+                
+                // Broadcast a message to all players
+                io.emit('chat_message', {
+                    username: 'System',
+                    message: `${player.username} caught a ${caughtFish.rarity} ${caughtFish.name} (${caughtFish.size.toFixed(1)} cm)!`
+                });
+            });
+        } else {
+            // Player not near water - this is a cheat attempt or client/server desync
+            socket.emit('chat_message', {
+                username: 'System',
+                message: 'You need to be at a pond to fish!'
+            });
+        }
+    }
+});
+
+socket.on('get_fish_inventory', () => {
+    if (players[socket.id]) {
+        const username = players[socket.id].username;
+        
+        // Get user ID from username
+        db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+            if (err || !user) {
+                console.error('Error getting user ID:', err);
+                return;
+            }
+            
+            // Query fish from database
+            db.all(
+                'SELECT * FROM fish WHERE user_id = ? ORDER BY rarity DESC, size DESC', 
+                [user.id], 
+                (err, fishes) => {
+                    if (err) {
+                        console.error('Error getting fish inventory:', err);
+                        return;
+                    }
+                    
+                    // Format the data for client
+                    const formattedFishes = fishes.map(fish => {
+                        return {
+                            id: fish.id,
+                            typeId: fish.type_id,
+                            name: fish.name,
+                            size: fish.size,
+                            rarity: fish.rarity,
+                            caughtAt: fish.caught_at
+                        };
+                    });
+                    
+                    // Send fish inventory to client
+                    socket.emit('fish_inventory', formattedFishes);
+                }
+            );
+        });
+    }
+});
+socket.on('delete_fish', (data) => {
+    if (players[socket.id]) {
+        const username = players[socket.id].username;
+        const fishId = data.fishId;
+        
+        if (!fishId) {
+            socket.emit('fish_deleted', { 
+                success: false, 
+                error: 'Invalid fish ID' 
+            });
+            return;
+        }
+        
+        // Get user ID from username
+        db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+            if (err || !user) {
+                console.error('Error getting user ID:', err);
+                socket.emit('fish_deleted', { 
+                    success: false, 
+                    error: 'Failed to authenticate user' 
+                });
+                return;
+            }
+            
+            // Get fish details for the response message
+            db.get('SELECT name, rarity FROM fish WHERE id = ? AND user_id = ?', 
+                [fishId, user.id], 
+                (err, fish) => {
+                    if (err) {
+                        console.error('Error getting fish details:', err);
+                        socket.emit('fish_deleted', { 
+                            success: false, 
+                            error: 'Database error' 
+                        });
+                        return;
+                    }
+                    
+                    if (!fish) {
+                        socket.emit('fish_deleted', { 
+                            success: false, 
+                            error: 'Fish not found or does not belong to you' 
+                        });
+                        return;
+                    }
+                    
+                    // Delete the fish record
+                    db.run('DELETE FROM fish WHERE id = ? AND user_id = ?', 
+                        [fishId, user.id], 
+                        function(err) {
+                            if (err) {
+                                console.error('Error deleting fish:', err);
+                                socket.emit('fish_deleted', { 
+                                    success: false, 
+                                    error: 'Failed to delete fish' 
+                                });
+                                return;
+                            }
+                            
+                            if (this.changes === 0) {
+                                socket.emit('fish_deleted', { 
+                                    success: false, 
+                                    error: 'Fish not found or does not belong to you' 
+                                });
+                                return;
+                            }
+                            
+                            // Successful deletion
+                            socket.emit('fish_deleted', {
+                                success: true,
+                                fishId: fishId,
+                                fishName: `${fish.rarity} ${fish.name}`
+                            });
+                            
+                            // Log the deletion
+                            console.log(`User ${username} deleted fish ${fishId}`);
+                        }
+                    );
+                }
+            );
+        });
+    } else {
+        socket.emit('fish_deleted', { 
+            success: false, 
+            error: 'User not authenticated' 
+        });
+    }
 });
 socket.on('shoot_bullet', (bulletData) => {
     if (players[socket.id] && players[socket.id].ammo > 0) {
@@ -908,7 +1404,65 @@ socket.on('collect_coin', (coinId) => {
         }
     });
 });
+function determineCaughtFish() {
+    // Calculate total chance for normalization
+    const totalChance = fishTypes.reduce((sum, fish) => sum + fish.chance, 0);
+    
+    // Generate random number between 0 and total chance
+    const random = Math.random() * totalChance;
+    
+    // Determine which fish is caught based on cumulative chance
+    let cumulativeChance = 0;
+    let caughtFishType = fishTypes[0]; // Default to first fish
+    
+    for (const fishType of fishTypes) {
+        cumulativeChance += fishType.chance;
+        if (random <= cumulativeChance) {
+            caughtFishType = fishType;
+            break;
+        }
+    }
+    
+    // Determine size (random between min and max)
+    const size = caughtFishType.minSize + 
+                 Math.random() * (caughtFishType.maxSize - caughtFishType.minSize);
+    
+    // Create fish object
+    return {
+        typeId: caughtFishType.id,
+        name: caughtFishType.name,
+        size: parseFloat(size.toFixed(1)), // Round to 1 decimal place
+        rarity: caughtFishType.rarity
+    };
+}
 
+// Function to store fish in database
+function storeFishInDatabase(username, fish, callback) {
+    // Get user ID from username
+    db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+        if (err || !user) {
+            console.error('Error getting user ID:', err);
+            if (callback) callback(err, null);
+            return;
+        }
+        
+        // Insert fish into database
+        db.run(
+            'INSERT INTO fish (user_id, type_id, name, size, rarity) VALUES (?, ?, ?, ?, ?)',
+            [user.id, fish.typeId, fish.name, fish.size, fish.rarity],
+            function(err) {
+                if (err) {
+                    console.error('Error inserting fish:', err);
+                    if (callback) callback(err, null);
+                    return;
+                }
+                
+                // Return inserted ID
+                if (callback) callback(null, this.lastID);
+            }
+        );
+    });
+}
 // Helper function to generate random color
 
 function getRandomColor() {

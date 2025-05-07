@@ -253,13 +253,22 @@
         let username = "";
         let userColor = "#FF0000";
         let players = {};
+
+        let fishInventory = []; // Array to store caught fish
+let isInventoryOpen = false;
+let isFishing = false;
+let fishingProgress = 0;
+let fishingSuccess = false;
+let fishingResult = null;
+let fishingTimeout = null;
         let myId = null;
         let playerScore = 0;
         let gameObjects = {
             trees: [],
             rocks: [],
             coins: [],
-            ammoPacks: []
+            ammoPacks: [],
+            ponds: []
         };
         let currentAmmo = 5; // Start with 30 bullets
         const MAX_AMMO = 10; // Maximum ammo capacity
@@ -292,8 +301,17 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         // Game assets preloading
         const playerSprite = new Image();
         playerSprite.src = '/player-sprite.png';
-        
+        const pondSprite = new Image();
+        pondSprite.src = '/pond.png'; // Create this image or use a placeholder
+        const fishingRodSprite = new Image();
+fishingRodSprite.src = '/fishing-rod.png'; // Create this image or use a placeholder
         const treeSprite = new Image();
+
+        const fishSprites = {};
+for (let i = 1; i <= 10; i++) {
+    fishSprites[`fish${i}`] = new Image();
+    fishSprites[`fish${i}`].src = `/fish${i}.png`; // Create these images or use placeholders
+}
         treeSprite.src = '/tree.png'; // Create this image or use a placeholder
         
         const rockSprite = new Image();
@@ -414,6 +432,7 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         toggleButton.textContent = 'Show Chat';
     }
 }
+
         // Login handling
         document.getElementById('loginButton').addEventListener('click', login);
         document.getElementById('loginUsername').addEventListener('keypress', (e) => {
@@ -525,6 +544,20 @@ document.getElementById('toggleChatButton').addEventListener('click', toggleChat
             
             // Set up movement controls
             
+// Add click handler for fishing
+canvas.addEventListener('click', (e) => {
+    // Only allow fishing when not already fishing and not typing in chat
+    if (!isFishing && !chatInputFocused && isPlayerInWater() && currentAmmo > 0) {
+        startFishing();
+    }
+});
+
+// Add 'E' key handler for fish inventory
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyE' && !chatInputFocused) {
+        toggleFishInventory();
+    }
+});
             window.addEventListener('keydown', handleKeyDown);
             window.addEventListener('keyup', handleKeyUp);
             window.addEventListener('mousemove', (e) => {
@@ -601,6 +634,18 @@ document.getElementById('toggleChatButton').addEventListener('click', toggleChat
         }
    
 });
+socket.on('fish_deleted', (data) => {
+    if (data.success) {
+        // Server confirmed deletion, show notification
+        addChatMessage('System', `${data.fishName} has been removed from your inventory.`);
+        
+        // Request updated inventory to ensure client and server are in sync
+        socket.emit('get_fish_inventory');
+    } else {
+        // Handle error
+        addChatMessage('System', 'Failed to remove fish: ' + (data.error || 'Unknown error'));
+    }
+});
     socket.on('ammo_update', (data) => {
     currentAmmo = data.ammo;
     updateAmmoDisplay();
@@ -651,6 +696,23 @@ document.getElementById('toggleChatButton').addEventListener('click', toggleChat
                 addChatMessage(data.username, data.message);
             });
         }
+        socket.on('fish_caught', (fishData) => {
+    // Add the fish to inventory
+    fishInventory.push(fishData);
+    
+    // Show notification
+    addChatMessage('System', `You caught a ${fishData.rarity} ${fishData.name} (${fishData.size} cm)!`);
+    
+    // Sort inventory by rarity and size
+    fishInventory.sort((a, b) => {
+        const rarityOrder = { 'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4 };
+        return rarityOrder[b.rarity] - rarityOrder[a.rarity] || b.size - a.size;
+    });
+});
+
+socket.on('fish_inventory', (inventory) => {
+    fishInventory = inventory;
+});
         // Set up logout and delete account buttons
 document.getElementById('logoutButton').addEventListener('click', handleLogout);
 document.getElementById('deleteAccountButton').addEventListener('click', confirmDeleteAccount);
@@ -1310,6 +1372,112 @@ function createHitEffect(x, y) {
     hitSound.play().catch(e => console.log('Audio play failed:', e));
 }
 
+
+function drawPonds() {
+    gameObjects.ponds.forEach(pond => {
+        const drawX = pond.x - cameraX;
+        const drawY = pond.y - cameraY;
+        
+        // Only draw if visible on screen (with buffer)
+        if (
+            drawX + pond.width >= -100 &&
+            drawX <= canvas.width + 100 &&
+            drawY + pond.height >= -100 &&
+            drawY <= canvas.height + 100
+        ) {
+            // Try to draw sprite, fallback to colored shape
+            try {
+                ctx.drawImage(pondSprite, drawX, drawY, pond.width, pond.height);
+            } catch (e) {
+                // Fallback to blue oval
+                ctx.fillStyle = '#4FC3F7';
+                ctx.beginPath();
+                ctx.ellipse(
+                    drawX + pond.width/2, 
+                    drawY + pond.height/2, 
+                    pond.width/2, 
+                    pond.height/2, 
+                    0, 0, Math.PI * 2
+                );
+                ctx.fill();
+                
+                // Add some detail to the pond
+                ctx.fillStyle = '#29B6F6';
+                ctx.beginPath();
+                ctx.ellipse(
+                    drawX + pond.width/2, 
+                    drawY + pond.height/2, 
+                    pond.width/3, 
+                    pond.height/3, 
+                    0, 0, Math.PI * 2
+                );
+                ctx.fill();
+                
+                // Add ripple effects
+                drawPondRipples(drawX, drawY, pond);
+            }
+            
+            // Animate water by drawing semi-transparent waves
+            drawWaterAnimation(drawX, drawY, pond);
+        }
+    });
+}
+
+// Add ripple effects to pond
+function drawPondRipples(drawX, drawY, pond) {
+    const time = Date.now() * 0.001;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    
+    // Draw 3 elliptical ripples that grow and fade over time
+    for (let i = 0; i < 3; i++) {
+        const offset = i * Math.PI * 0.6; // Offset each ripple
+        const size = ((time + offset) % 3) / 3; // 0 to 1 value for size
+        
+        if (size > 0.1) { // Only draw visible ripples
+            ctx.globalAlpha = 0.3 - size * 0.3; // Fade out as they grow
+            ctx.beginPath();
+            ctx.ellipse(
+                drawX + pond.width/2, 
+                drawY + pond.height/2, 
+                pond.width/2 * size + pond.width/4, 
+                pond.height/2 * size + pond.height/4, 
+                0, 0, Math.PI * 2
+            );
+            ctx.stroke();
+        }
+    }
+    
+    ctx.globalAlpha = 1.0; // Reset alpha
+}
+
+// Animate water surface
+function drawWaterAnimation(drawX, drawY, pond) {
+    const time = Date.now() * 0.001;
+    
+    // Draw some animated wave lines on the water
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    
+    // Create wave patterns
+    for (let i = 0; i < 5; i++) {
+        const yOffset = (i * pond.height/5) + Math.sin(time * 2 + i) * 5;
+        
+        if (yOffset > 0 && yOffset < pond.height) {
+            ctx.beginPath();
+            ctx.moveTo(drawX + pond.width * 0.2, drawY + yOffset);
+            
+            // Create wavy line
+            for (let x = 0; x <= 6; x++) {
+                const waveX = drawX + pond.width * (0.2 + x * 0.1);
+                const waveY = drawY + yOffset + Math.sin(time * 3 + x + i) * 3;
+                ctx.lineTo(waveX, waveY);
+            }
+            
+            ctx.stroke();
+        }
+    }
+}
 // 7. Add bullet drawing function
 function drawBullets() {
     for (const bullet of bullets) {
@@ -1607,26 +1775,34 @@ function playAmmoSound() {
             // Draw clouds (optional)
             drawPixelatedGrass();
           
-            drawPlayers();
+           
             // Draw rocks
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
             
+            //draw ponds
+            drawPonds();
             // Draw trees
             drawGameObjects(gameObjects.trees, treeSprite, 'green');
             
             // Draw coins
             drawCoins();
+            drawPlayers();
+
             
              // Draw ammo packs
             drawAmmoPacks();
-            drawClouds();
-            // Draw all players
-           
-            
-            updateBullets(16); // Assuming ~60fps, 16ms per frame
-
-            // Draw bullets (add this after drawing players)
-            drawBullets();
+            if (isFishing) {
+        drawFishingProgress();
+    }
+    
+    // Draw fish inventory if open
+    if (isInventoryOpen) {
+        drawFishInventory();
+    }
+    
+    updateBullets(16);
+    drawBullets();
+    drawClouds();
             // Continue the game loop
             requestAnimationFrame(gameLoop);
         }
@@ -1904,6 +2080,375 @@ function drawClouds() {
                 }
             }
         }
+        function isPlayerInWater() {
+    if (!myId || !players[myId]) return false;
+    
+    const player = players[myId];
+    const playerCenter = {
+        x: player.x + PLAYER_SIZE/2,
+        y: player.y + PLAYER_SIZE/2
+    };
+    
+    // Check each pond
+    for (const pond of gameObjects.ponds) {
+        // Use ellipse equation to check if player is in the pond
+        const dx = (playerCenter.x - (pond.x + pond.width/2)) / (pond.width/2);
+        const dy = (playerCenter.y - (pond.y + pond.height/2)) / (pond.height/2);
+        
+        if (dx*dx + dy*dy <= 1) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+
+// Start fishing minigame
+function startFishing() {
+    if (isFishing) return;
+    
+    isFishing = true;
+    fishingProgress = 0;
+    fishingSuccess = false;
+    fishingResult = null;
+    
+    // Show fishing message
+    addChatMessage('System', 'Fishing started! Click when the indicator is in the green zone to catch a fish!');
+    
+    // Simulate rod casting animation
+    playSound('splash.mp3', 0.3);
+    
+    // Start fishing minigame
+    fishingTimeout = setTimeout(() => {
+        if (isFishing) {
+            // If player didn't click in time, fishing fails
+            isFishing = false;
+            addChatMessage('System', 'You missed your chance! The fish got away.');
+        }
+    }, 5000); // 5 seconds to click
+}
+
+// Handle fishing progress
+function drawFishingProgress() {
+    if (!isFishing) return;
+    
+    const player = players[myId];
+    const drawX = player.x - cameraX;
+    const drawY = player.y - cameraY;
+    
+    // Draw fishing line from player to water
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(drawX + PLAYER_SIZE/2, drawY + PLAYER_SIZE/2);
+    
+    // Find closest pond point for fishing line
+    let nearestPondPoint = { x: drawX + PLAYER_SIZE/2, y: drawY + PLAYER_SIZE/2 + 100 };
+    for (const pond of gameObjects.ponds) {
+        const pondCenterX = pond.x - cameraX + pond.width/2;
+        const pondCenterY = pond.y - cameraY + pond.height/2;
+        
+        // Simplified nearest point calculation - this could be improved
+        nearestPondPoint = { 
+            x: pondCenterX, 
+            y: pondCenterY 
+        };
+    }
+    
+    // Draw fishing line
+    ctx.lineTo(nearestPondPoint.x, nearestPondPoint.y);
+    ctx.stroke();
+    
+    // Draw fishing float
+    ctx.fillStyle = '#FF0000';
+    ctx.beginPath();
+    ctx.arc(nearestPondPoint.x, nearestPondPoint.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw fishing progress bar
+    const progressBarWidth = 200;
+    const progressBarHeight = 30;
+    const progressBarX = (canvas.width - progressBarWidth) / 2;
+    const progressBarY = canvas.height - 100;
+    
+    // Update fishing progress based on time
+    fishingProgress = (Date.now() % 5000) / 5000; // 0 to 1 value cycling every 5 seconds
+    
+    // Draw progress bar background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
+    
+    // Draw progress indicator
+    const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(indicatorPos - 2, progressBarY, 4, progressBarHeight);
+    
+    // Draw success zone (30% of the bar width, positioned randomly)
+    const successZoneWidth = progressBarWidth * 0.3;
+    
+    // Position success zone based on a repeating pattern with pseudo-randomness
+    const timeOffset = Math.floor(Date.now() / 5000); // Changes every 5 seconds
+    const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
+    const successZoneStart = progressBarX + successZonePosition;
+    
+    ctx.fillStyle = '#4CAF50'; // Green color for success zone
+    ctx.fillRect(successZoneStart, progressBarY, successZoneWidth, progressBarHeight);
+    
+    // Check if the indicator is in the success zone
+    const inSuccessZone = 
+        indicatorPos >= successZoneStart && 
+        indicatorPos <= successZoneStart + successZoneWidth;
+    
+    // Add "CLICK NOW!" text if in success zone
+    if (inSuccessZone) {
+        ctx.fillStyle = '#FF0000';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('CLICK NOW!', canvas.width / 2, progressBarY - 10);
+        
+        // Setup click handler for catch attempt
+        canvas.onclick = function() {
+            catchFish(true); // Success!
+            canvas.onclick = null; // Remove click handler
+        };
+    }
+}
+
+// Handle caught fish
+function catchFish(success) {
+    if (!isFishing) return;
+    
+    // Clear fishing timeout
+    clearTimeout(fishingTimeout);
+    isFishing = false;
+    
+    if (success) {
+        // Request a fish from the server
+        socket.emit('catch_fish');
+        addChatMessage('System', 'You got a bite! Waiting to see what you caught...');
+        playSound('catch.mp3', 0.4);
+    } else {
+        addChatMessage('System', 'You missed! Better luck next time.');
+        playSound('missed.mp3', 0.3);
+    }
+}
+
+// Render fish inventory
+function toggleFishInventory() {
+    isInventoryOpen = !isInventoryOpen;
+    
+    if (isInventoryOpen) {
+        // Request latest fish inventory from server
+        socket.emit('get_fish_inventory');
+    }
+}
+
+// Draw the fish inventory screen
+function drawFishInventory() {
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Inventory panel
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    const panelX = (canvas.width - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+    
+    // Draw panel background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+    
+    // Panel title
+    ctx.fillStyle = '#333333';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Fish Collection', panelX + panelWidth/2, panelY + 40);
+    
+    // Close button
+    ctx.fillStyle = '#FF0000';
+    ctx.fillRect(panelX + panelWidth - 30, panelY + 10, 20, 20);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('×', panelX + panelWidth - 20, panelY + 25);
+    
+    // Check if we have fish to display
+    if (fishInventory.length === 0) {
+        ctx.fillStyle = '#666666';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('No fish caught yet. Go fishing!', panelX + panelWidth/2, panelY + panelHeight/2);
+    } else {
+        // Display fish in a grid
+        const itemSize = 100;
+        const columns = Math.floor((panelWidth - 40) / itemSize);
+        const startX = panelX + (panelWidth - (columns * itemSize)) / 2;
+        const startY = panelY + 80;
+        
+        fishInventory.forEach((fish, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            const x = startX + col * itemSize;
+            const y = startY + row * itemSize;
+            
+            // Draw fish slot background
+            ctx.fillStyle = '#F0F0F0';
+            ctx.fillRect(x, y, itemSize - 10, itemSize - 10);
+            
+            // Draw fish sprite if available
+            try {
+                const fishSprite = fishSprites[`fish${fish.typeId}`];
+                ctx.drawImage(fishSprite, x + 10, y + 10, itemSize - 30, itemSize - 50);
+            } catch (e) {
+                // Fallback to colored rectangle if sprite not available
+                ctx.fillStyle = getFishColor(fish.typeId);
+                ctx.fillRect(x + 10, y + 10, itemSize - 30, itemSize - 50);
+            }
+            
+            // Draw fish details
+            ctx.fillStyle = '#333333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(fish.name, x + (itemSize - 10)/2, y + itemSize - 35);
+            ctx.fillText(`${fish.size} cm`, x + (itemSize - 10)/2, y + itemSize - 20);
+            
+            // Draw rarity indicator
+            const rarityColor = getRarityColor(fish.rarity);
+            ctx.fillStyle = rarityColor;
+            ctx.fillRect(x + (itemSize - 40)/2, y + itemSize - 15, 40, 10);
+            
+            // NEW: Add delete button for each fish
+            ctx.fillStyle = '#FF3B30';
+            ctx.fillRect(x + itemSize - 25, y + 5, 15, 15);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('×', x + itemSize - 17, y + 15);
+            
+            // Store button coordinates for click detection
+            fish.deleteButton = {
+                x: x + itemSize - 25,
+                y: y + 5,
+                width: 15,
+                height: 15
+            };
+        });
+    }
+    
+    // Stats section
+    const statsY = panelY + panelHeight - 60;
+    
+    ctx.fillStyle = '#333333';
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+    
+    // Calculate stats
+    const totalFish = fishInventory.length;
+    const uniqueTypes = new Set(fishInventory.map(fish => fish.typeId)).size;
+    const largestFish = fishInventory.length > 0 ? 
+        Math.max(...fishInventory.map(fish => fish.size)) : 0;
+    
+    ctx.fillText(`Total Caught: ${totalFish}`, panelX + 30, statsY);
+    ctx.fillText(`Unique Types: ${uniqueTypes}/10`, panelX + 30, statsY + 25);
+    ctx.fillText(`Largest Fish: ${largestFish} cm`, panelX + panelWidth - 200, statsY);
+    
+    // Handle clicks in inventory (close button or delete fish buttons)
+    canvas.onclick = handleInventoryClick;
+}
+
+// 2. Add a function to handle inventory clicks
+function handleInventoryClick(e) {
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    // Get canvas position for accurate coordinates
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = mouseX - rect.left;
+    const canvasY = mouseY - rect.top;
+    
+    // Calculate panel dimensions again (should match drawFishInventory)
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    const panelX = (canvas.width - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+    
+    // Check if close button clicked
+    if (
+        canvasX >= panelX + panelWidth - 30 && 
+        canvasX <= panelX + panelWidth - 10 &&
+        canvasY >= panelY + 10 && 
+        canvasY <= panelY + 30
+    ) {
+        isInventoryOpen = false;
+        canvas.onclick = null; // Remove click handler
+        return;
+    }
+    
+    // Check if any fish delete button was clicked
+    for (const fish of fishInventory) {
+        if (fish.deleteButton && 
+            canvasX >= fish.deleteButton.x &&
+            canvasX <= fish.deleteButton.x + fish.deleteButton.width &&
+            canvasY >= fish.deleteButton.y &&
+            canvasY <= fish.deleteButton.y + fish.deleteButton.height
+        ) {
+            // Show confirmation dialog
+            if (confirm(`Are you sure you want to remove this ${fish.rarity} ${fish.name}?`)) {
+                deleteFish(fish.id);
+            }
+            return;
+        }
+    }
+}
+
+// 3. Add function to send delete request to server
+function deleteFish(fishId) {
+    // Send delete request to server
+    socket.emit('delete_fish', { fishId: fishId });
+    
+    // Optimistically remove from local inventory (server will validate)
+    fishInventory = fishInventory.filter(fish => fish.id !== fishId);
+    
+    // Redraw inventory
+    drawFishInventory();
+    
+    // Play sound effect
+    playSound('trash.mp3', 0.3);
+}
+
+// Helper functions for fish display
+function getFishColor(typeId) {
+    const colors = [
+        '#F44336', '#E91E63', '#9C27B0', '#673AB7', 
+        '#3F51B5', '#2196F3', '#03A9F4', '#00BCD4', 
+        '#009688', '#4CAF50'
+    ];
+    return colors[(typeId - 1) % colors.length];
+}
+
+function getRarityColor(rarity) {
+    switch(rarity) {
+        case 'Common': return '#AAAAAA';
+        case 'Uncommon': return '#4CAF50';
+        case 'Rare': return '#2196F3';
+        case 'Epic': return '#9C27B0';
+        case 'Legendary': return '#FFD700';
+        default: return '#AAAAAA';
+    }
+}
+
+// Play sounds with error handling
+function playSound(soundFile, volume = 0.5) {
+    try {
+        const sound = new Audio(`/${soundFile}`);
+        sound.volume = volume;
+        sound.play().catch(e => console.log(`Sound play failed: ${e}`));
+    } catch (e) {
+        console.log(`Error playing sound: ${e}`);
+    }
+}
     </script>
      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 12px; opacity: 0.5;">
         <a href="/admin" target="_blank">Admin</a>
