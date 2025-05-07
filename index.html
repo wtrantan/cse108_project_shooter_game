@@ -259,8 +259,8 @@
         };
         let currentAmmo = 30; // Start with 30 bullets
         const MAX_AMMO = 50; // Maximum ammo capacity
-        const AMMO_PACK_SIZE = 35; // Amount of ammo in each pack
-        const AMMO_PACK_SIZE_DISPLAY = 30; // Visual size of ammo packs
+        const AMMO_PACK_SIZE = 30; // Amount of ammo in each pack
+        const AMMO_PACK_SIZE_DISPLAY = 50; // Visual size of ammo packs
         let bullets = [];
         let mouseX = 0;
         let mouseY = 0;
@@ -290,16 +290,16 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         playerSprite.src = '/player-sprite.png';
         
         const treeSprite = new Image();
-        treeSprite.src = '/player-sprite.png'; // Create this image or use a placeholder
+        treeSprite.src = '/tree.png'; // Create this image or use a placeholder
         
         const rockSprite = new Image();
-        rockSprite.src = '/player-sprite.png'; // Create this image or use a placeholder
+        rockSprite.src = '/rock.png'; // Create this image or use a placeholder
         
         const coinSprite = new Image();
         coinSprite.src = '/coin.png'; // Create this image or use a placeholder
         
         const ammoPackSprite = new Image();
-        ammoPackSprite.src = '/ammo-pack.png'; // Create this image or use a placeholder
+        ammoPackSprite.src = '/ammo-rifle.png'; // Create this image or use a placeholder
         // Camera tracking
         let cameraX = 0;
         let cameraY = 0;
@@ -792,12 +792,12 @@ async function deleteAccount() {
         }
         
         function handleKeyDown(e) {
-    updateKeyState(e, true);
+            const input = updateKeyState(e, true);
     if (input) addToInputBuffer(input);
 }
 
 function handleKeyUp(e) {
-    updateKeyState(e, false);
+    const input = updateKeyState(e, false);
     if (input) addToInputBuffer(input);
 }
 
@@ -969,7 +969,7 @@ function shootBullet() {
 
 // 4. Add sound effect function
 function playShootSound() {
-    const shootSound = new Audio('/shoot-sound.mp3'); // Create this sound or use a placeholder
+    const shootSound = new Audio('/gun.mp3'); // Create this sound or use a placeholder
     shootSound.volume = 0.2;
     shootSound.play().catch(e => console.log('Audio play failed:', e));
 }
@@ -1104,7 +1104,129 @@ function createBulletImpactEffect(x, y) {
     impactSound.volume = 0.2;
     impactSound.play().catch(e => console.log('Audio play failed:', e));
 }
+// Find the gameLoop function in your code and modify the part where you draw the ground
+// Replace the current ground drawing code with this:
 
+function gameLoop() {
+    if (!myId || !players[myId]) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    // Update player movement based on key states
+    updatePlayerMovement();
+    // Update camera position to follow player
+    const player = players[myId];
+    cameraX = player.x - canvas.width / 2 + PLAYER_SIZE / 2;
+    cameraY = player.y - canvas.height / 2 + PLAYER_SIZE / 2;
+    
+    // Clamp camera to world bounds
+    cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
+    cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - canvas.height));
+    
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw sky background
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw pixelated grass background
+    drawPixelatedGrass();
+    
+    // Draw clouds (optional)
+    drawClouds();
+    
+    // Rest of your drawing code...
+    drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
+    drawGameObjects(gameObjects.trees, treeSprite, 'green');
+    drawCoins();
+    drawAmmoPacks();
+    drawPlayers();
+    updateBullets(16);
+    drawBullets();
+    
+    // Continue the game loop
+    requestAnimationFrame(gameLoop);
+}
+
+// Add this new function to create the pixelated grass effect
+function drawPixelatedGrass() {
+    // Use larger pixels for better performance
+    const pixelSize = 16; // Larger pixels for better performance
+    
+    // Calculate visible area based on camera position
+    // Only draw pixels that are actually visible on screen
+    const startX = Math.floor(cameraX / pixelSize) * pixelSize;
+    const startY = Math.floor(cameraY / pixelSize) * pixelSize;
+    const endX = startX + canvas.width + pixelSize;
+    const endY = startY + canvas.height + pixelSize;
+    
+    // Simpler color palette for better performance
+    const grassColors = [
+        '#7CFC00', // Base bright green (main color)
+        '#6BC400', // Slightly darker green
+        '#5FB300', // Medium green
+        '#73DB0A'  // Yellowish green
+    ];
+    
+    // Pre-calculated pattern lookup for better performance
+    // This creates a 16x16 pattern that repeats
+    if (!window.grassPattern) {
+        // Create a reusable pattern (only computed once)
+        window.grassPattern = [];
+        for (let px = 0; px < 16; px++) {
+            window.grassPattern[px] = [];
+            for (let py = 0; py < 16; py++) {
+                // Generate values for each position in the repeating pattern
+                const patternSeed = Math.sin(px * 0.7) * 10000 + Math.cos(py * 0.7) * 10000;
+                const val = Math.abs(patternSeed) % 100;
+                
+                // Determine color index based on the value
+                let colorIndex;
+                if (val < 60) colorIndex = 0; // Main color (60%)
+                else if (val < 85) colorIndex = 1; // Second color (25%)
+                else if (val < 95) colorIndex = 2; // Third color (10%)
+                else colorIndex = 3; // Fourth color (5%)
+                
+                window.grassPattern[px][py] = colorIndex;
+            }
+        }
+    }
+    
+    // Draw the pixelated grass efficiently
+    for (let x = startX; x < endX; x += pixelSize) {
+        for (let y = startY; y < endY; y += pixelSize) {
+            // Use a repeating pattern based on world position
+            const patternX = Math.abs(Math.floor(x / pixelSize) % 16);
+            const patternY = Math.abs(Math.floor(y / pixelSize) % 16);
+            
+            // Look up the color index from our pre-computed pattern
+            const colorIndex = window.grassPattern[patternX][patternY];
+            
+            // Draw the grass pixel
+            ctx.fillStyle = grassColors[colorIndex];
+            ctx.fillRect(
+                x - cameraX, 
+                y - cameraY, 
+                pixelSize, 
+                pixelSize
+            );
+            
+            // Add minimal detail elements (only to about 1% of pixels)
+            // This uses a very efficient calculation
+            if ((patternX + patternY) % 16 === 0) {
+                // Simple highlight detail that's very cheap to draw
+                ctx.fillStyle = '#AEFF00';
+                ctx.fillRect(
+                    x - cameraX + pixelSize/4, 
+                    y - cameraY + pixelSize/4, 
+                    pixelSize/2, 
+                    pixelSize/2
+                );
+            }
+        }
+    }
+}
 function checkBulletObstacleCollision(bullet) {
     // Check rocks
     for (const rock of gameObjects.rocks) {
@@ -1219,8 +1341,14 @@ function drawAmmoPacks() {
         }
     });
 }
+let lastFlashTime = 0;
+const FLASH_COOLDOWN = 500;
 function flashScreen(color) {
+    const currentTime = Date.now();
+    if (currentTime - lastFlashTime < FLASH_COOLDOWN) return;
+    lastFlashTime = currentTime;
     // Create overlay div
+    
     const flash = document.createElement('div');
     flash.style.position = 'absolute';
     flash.style.top = '0';
@@ -1325,7 +1453,7 @@ function playHitConfirmSound() {
 }
 function playAmmoSound() {
     const ammoSound = new Audio('/ammo-sound.mp3'); // Create this sound or use a placeholder
-    ammoSound.volume = 0.3;
+    ammoSound.volume = 0.4;
     ammoSound.play().catch(e => console.log('Audio play failed:', e));
 }
         function checkCollision(player, newX, newY) {
@@ -1433,8 +1561,9 @@ function playAmmoSound() {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             // Draw clouds (optional)
-            drawClouds();
-            
+            drawPixelatedGrass();
+          
+            drawPlayers();
             // Draw rocks
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
             
@@ -1446,9 +1575,9 @@ function playAmmoSound() {
             
              // Draw ammo packs
             drawAmmoPacks();
-
+            drawClouds();
             // Draw all players
-            drawPlayers();
+           
             
             updateBullets(16); // Assuming ~60fps, 16ms per frame
 
@@ -1553,47 +1682,53 @@ function playAmmoSound() {
             });
         }
         
-        function drawGameObjects(objects, sprite, fallbackColor) {
-            objects.forEach(obj => {
-                const drawX = obj.x - cameraX;
-                const drawY = obj.y - cameraY;
-                const size = obj.size || 50;
+      function drawGameObjects(objects, sprite, fallbackColor) {
+    objects.forEach(obj => {
+        // Use our constants instead of default values
+        const size = obj === gameObjects.trees ? 
+            (obj.size || TREE_SIZE) : 
+            (obj === gameObjects.rocks ? 
+                (obj.size || ROCK_SIZE) : 
+                (obj.size || 50));
+        
+        const drawX = obj.x - cameraX;
+        const drawY = obj.y - cameraY;
+        
+        // Only draw if visible on screen (with buffer)
+        if (
+            drawX + size >= -100 &&
+            drawX <= canvas.width + 100 &&
+            drawY + size >= -100 &&
+            drawY <= canvas.height + 100
+        ) {
+            // Try to draw sprite, fallback to color shape
+            try {
+                ctx.drawImage(sprite, drawX, drawY, size, size);
+            } catch (e) {
+                // Fallback to colored shape
+                ctx.fillStyle = fallbackColor;
                 
-                // Only draw if visible on screen (with buffer)
-                if (
-                    drawX + size >= -100 &&
-                    drawX <= canvas.width + 100 &&
-                    drawY + size >= -100 &&
-                    drawY <= canvas.height + 100
-                ) {
-                    // Try to draw sprite, fallback to color shape
-                    try {
-                        ctx.drawImage(sprite, drawX, drawY, size, size);
-                    } catch (e) {
-                        // Fallback to colored shape
-                        ctx.fillStyle = fallbackColor;
-                        
-                        if (objects === gameObjects.rocks) {
-                            // Draw rock (irregular circle)
-                            ctx.beginPath();
-                            ctx.ellipse(drawX + size/2, drawY + size/2, size/2, size/2 * 0.8, 0, 0, Math.PI * 2);
-                            ctx.fill();
-                        } else if (objects === gameObjects.trees) {
-                            // Draw tree (triangle top with rectangle trunk)
-                            ctx.fillStyle = '#8B4513'; // Brown trunk
-                            ctx.fillRect(drawX + size/3, drawY + size/2, size/3, size/2);
-                            
-                            ctx.fillStyle = '#006400'; // Dark green foliage
-                            ctx.beginPath();
-                            ctx.moveTo(drawX, drawY + size/2);
-                            ctx.lineTo(drawX + size/2, drawY);
-                            ctx.lineTo(drawX + size, drawY + size/2);
-                            ctx.fill();
-                        }
-                    }
+                if (objects === gameObjects.rocks) {
+                    // Draw rock (irregular circle)
+                    ctx.beginPath();
+                    ctx.ellipse(drawX + size/2, drawY + size/2, size/2, size/2 * 0.8, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (objects === gameObjects.trees) {
+                    // Draw tree (triangle top with rectangle trunk)
+                    ctx.fillStyle = '#8B4513'; // Brown trunk
+                    ctx.fillRect(drawX + size/3, drawY + size/2, size/3, size/2);
+                    
+                    ctx.fillStyle = '#006400'; // Dark green foliage
+                    ctx.beginPath();
+                    ctx.moveTo(drawX, drawY + size/2);
+                    ctx.lineTo(drawX + size/2, drawY);
+                    ctx.lineTo(drawX + size, drawY + size/2);
+                    ctx.fill();
                 }
-            });
+            }
         }
+    });
+}
         
         function drawCoins() {
             ctx.fillStyle = '#FFD700'; // Gold color
