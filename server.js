@@ -214,7 +214,7 @@ function generateGameObjects(mapWidth, mapHeight) {
     for (let i = 0; i < pondCount; i++) {
         // Make ponds different sizes
         const pondWidth = Math.floor(Math.random() * 150) + 200; // 200-350
-        const pondHeight = Math.floor(Math.random() * 300) + 150; // 150-250
+        const pondHeight = Math.floor(Math.random() * 100) + 150; // 150-250
         
         // Find a location that doesn't overlap with trees or rocks
         let validLocation = false;

@@ -344,7 +344,7 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         const PLAYER_SPEED = 3;
         const PLAYER_SIZE = 50;
         const COIN_SIZE = 30;
-        
+        let deleteButtonPositions = [];
         // Game assets preloading
         const playerSprite = new Image();
         playerSprite.src = '/player-penguin.png';
@@ -2522,6 +2522,9 @@ function drawFishInventory() {
         // Apply scroll offset
         const scrollY = viewportY - inventoryScrollOffset;
         
+        deleteButtonPositions = [];
+
+
         // Draw fish items
         fishInventory.forEach((fish, index) => {
             const col = index % columns;
@@ -2567,12 +2570,15 @@ function drawFishInventory() {
                     ctx.fillText('×', x + itemSize - 17, y + 15);
                     
                     // Store button coordinates for click detection
-                    fish.deleteButton = {
-                        x: x + itemSize - 25,
-                        y: y + inventoryScrollOffset - (scrollY - viewportY),
-                        width: 15,
-                        height: 15
-                    };
+                    deleteButtonPositions.push({
+        x: x + itemSize - 25,
+        y: y + 5,  // This is already the actual Y position on screen
+        width: 15,
+        height: 15,
+        fishId: fish.id,
+        fishName: fish.name,
+        fishRarity: fish.rarity
+    });
                 }
             }
         });
@@ -2629,7 +2635,7 @@ function handleInventoryClick(e) {
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
     
-    // Calculate panel dimensions again (should match drawFishInventory)
+    // Calculate panel dimensions
     const panelWidth = Math.min(canvas.width - 100, 800);
     const panelHeight = Math.min(canvas.height - 100, 600);
     const panelX = (canvas.width - panelWidth) / 2;
@@ -2719,29 +2725,18 @@ function handleInventoryClick(e) {
     
     // Handle delete button clicks only if viewing own inventory
     if (!viewingOtherPlayer) {
-        const viewportY = panelY + 100; // Match drawFishInventory
-        const viewportHeight = panelHeight - 180;
-        
-        // Check if scrollable area is clicked (for fish items)
-        if (canvasX >= panelX + 10 && 
-            canvasX <= panelX + panelWidth - 30 &&
-            canvasY >= viewportY && 
-            canvasY <= viewportY + viewportHeight) {
-            
-            // Check if any fish delete button was clicked
-            for (const fish of fishInventory) {
-                if (fish.deleteButton && 
-                    canvasX >= fish.deleteButton.x &&
-                    canvasX <= fish.deleteButton.x + fish.deleteButton.width &&
-                    canvasY >= fish.deleteButton.y &&
-                    canvasY <= fish.deleteButton.y + fish.deleteButton.height
-                ) {
-                    // Show confirmation dialog
-                    if (confirm(`Are you sure you want to remove this ${fish.rarity} ${fish.name}?`)) {
-                        deleteFish(fish.id);
-                    }
-                    return;
+        for (const button of deleteButtonPositions) {
+            if (
+                canvasX >= button.x &&
+                canvasX <= button.x + button.width &&
+                canvasY >= button.y &&
+                canvasY <= button.y + button.height
+            ) {
+                // Show confirmation dialog
+                if (confirm(`Are you sure you want to remove this ${button.fishRarity} ${button.fishName}?`)) {
+                    deleteFish(button.fishId);
                 }
+                return;
             }
         }
     }
