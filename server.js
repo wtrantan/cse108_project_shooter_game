@@ -177,7 +177,7 @@ const fishTypes = [
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
-const BULLET_LIFETIME = 1000; // 1 seconds max bullet lifetime
+const BULLET_LIFETIME = 5000; // 5 seconds max bullet lifetime
 const MAX_AMMO = 10; // Maximum ammo capacity
 const AMMO_PACK_SIZE = 5 // Amount of ammo in each pack
 function generateGameObjects(mapWidth, mapHeight) {
@@ -1051,13 +1051,13 @@ socket.on('catch_fish', () => {
                 break;
             }
         }
-        if (player.bait <= 0) {
-            socket.emit('chat_message', {
-                username: 'System',
-                message: 'You need bait to fish! Find bait packs around the map.'
-            });
-            return;
-        }
+        // if (player.bait <= 0) {
+        //     socket.emit('chat_message', {
+        //         username: 'System',
+        //         message: 'You need bait to fish! Find bait packs around the map.'
+        //     });
+        //     return;
+        // }
         if (nearWater) {
             // Determine which fish is caught based on rarity chances
             const caughtFish = determineCaughtFish();
@@ -1083,10 +1083,10 @@ socket.on('catch_fish', () => {
             });
         } else {
             // Player not near water - this is a cheat attempt or client/server desync
-            socket.emit('chat_message', {
-                username: 'System',
-                message: 'You need to be at a pond to fish!'
-            });
+            // socket.emit('chat_message', {
+            //     username: 'System',
+            //     message: 'You need to be at a pond to fish!'
+            // });
         }
     }
 });
@@ -1218,6 +1218,114 @@ socket.on('delete_fish', (data) => {
         });
     }
 });
+socket.on('search_player_fish', (data) => {
+    if (!players[socket.id]) {
+        socket.emit('other_player_fish', { 
+            error: 'You must be logged in to search for players.' 
+        });
+        return;
+    }
+    
+    const searchName = data.playerName;
+    console.log(`Player ${players[socket.id].username} searching for ${searchName}'s fish`);
+    
+    // Make sure searchName is valid
+    if (!searchName || searchName.trim() === '') {
+        socket.emit('other_player_fish', { 
+            error: 'Please enter a valid player name.' 
+        });
+        return;
+    }
+    
+    // Don't search for your own fish - just show your inventory
+    if (searchName.toLowerCase() === players[socket.id].username.toLowerCase()) {
+        socket.emit('other_player_fish', { 
+            error: 'That\'s you! Showing your own fish collection.' 
+        });
+        socket.emit('get_fish_inventory');
+        return;
+    }
+    
+    // Find player by username (case insensitive)
+    db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', [searchName], (err, user) => {
+        if (err) {
+            console.error('Database error when searching for player:', err);
+            socket.emit('other_player_fish', { 
+                error: 'Database error when searching for player.' 
+            });
+            return;
+        }
+        
+        if (!user) {
+            // Player not found
+            socket.emit('other_player_fish', { 
+                error: `Player "${searchName}" not found.` 
+            });
+            return;
+        }
+        
+        // Get the correct username with proper case
+        db.get('SELECT username FROM users WHERE id = ?', [user.id], (err, userDetail) => {
+            if (err || !userDetail) {
+                socket.emit('other_player_fish', { 
+                    error: 'Failed to find player details.' 
+                });
+                return;
+            }
+            
+            const correctUsername = userDetail.username;
+            
+            // Query fish from database
+            db.all(
+                'SELECT * FROM fish WHERE user_id = ? ORDER BY rarity DESC, size DESC', 
+                [user.id], 
+                (err, fishes) => {
+                    if (err) {
+                        console.error('Error getting fish inventory:', err);
+                        socket.emit('other_player_fish', { 
+                            error: 'Failed to load fish inventory.' 
+                        });
+                        return;
+                    }
+                    
+                    // Format the data for client
+                    const formattedFishes = fishes.map(fish => {
+                        return {
+                            id: fish.id,
+                            typeId: fish.type_id,
+                            name: fish.name,
+                            size: fish.size,
+                            rarity: fish.rarity,
+                            caughtAt: fish.caught_at
+                        };
+                    });
+                    
+                    // Log the search for monitoring
+                    console.log(`User ${players[socket.id].username} viewed ${correctUsername}'s fish collection (${formattedFishes.length} fish)`);
+                    
+                    // Send fish inventory to client
+                    socket.emit('other_player_fish', {
+                        playerName: correctUsername,
+                        fishes: formattedFishes
+                    });
+                    
+                    // Optional: Notify the player that someone viewed their collection
+                    // Only if they're online
+                    const targetSocketId = Object.keys(players).find(
+                        id => players[id].username.toLowerCase() === correctUsername.toLowerCase()
+                    );
+                    
+                    if (targetSocketId) {
+                        io.to(targetSocketId).emit('chat_message', {
+                            username: 'System',
+                            message: `${players[socket.id].username} is viewing your fish collection!`
+                        });
+                    }
+                }
+            );
+        });
+    });
+});
 socket.on('shoot_bullet', (bulletData) => {
     if (players[socket.id] && players[socket.id].ammo > 0) {
         // Decrease ammo
@@ -1271,10 +1379,10 @@ socket.on('collect_bait', (baitPackId) => {
             io.emit('game_state', { players, gameObjects });
             
             // Send notification
-            io.emit('chat_message', {
-                username: 'System',
-                message: `${username} collected fishing bait! Bait: ${players[socket.id].bait}`
-            });
+            // io.emit('chat_message', {
+            //     username: 'System',
+            //     message: `${username} collected fishing bait! Bait: ${players[socket.id].bait}`
+            // });
             
             // Send direct bait update to the client
             socket.emit('bait_update', { bait: players[socket.id].bait });
@@ -1348,10 +1456,10 @@ socket.on('collect_ammo', (ammoPackId) => {
             io.emit('game_state', { players, gameObjects });
             
             // Send notification
-            io.emit('chat_message', {
-                username: 'System',
-                message: `${username} collected ammo! Ammo: ${players[socket.id].ammo}`
-            });
+            // io.emit('chat_message', {
+            //     username: 'System',
+            //     message: `${username} collected ammo! Ammo: ${players[socket.id].ammo}`
+            // });
             
             // Send direct ammo update to the client
             socket.emit('ammo_update', { ammo: players[socket.id].ammo });
@@ -1411,10 +1519,10 @@ socket.on('collect_coin', (coinId) => {
             io.emit('game_state', { players, gameObjects });
             
             // Send notification
-            io.emit('chat_message', {
-                username: 'System',
-                message: `${username} collected a coin! Score: ${players[socket.id].score}`
-            });
+            // io.emit('chat_message', {
+            //     username: 'System',
+            //     message: `${username} collected a coin! Score: ${players[socket.id].score}`
+            // });
             
             // Generate a new coin after some time
             setTimeout(() => {
@@ -1782,7 +1890,7 @@ function isPositionColliding(x, y, playerSize) {
 
 function handlePlayerHit(playerId, bullet) {
     const shooterId = bullet.playerId;
-    const BULLET_DAMAGE = 10; // Make sure this is defined
+   
     
     // Shooter gains points
     if (players[shooterId]) {
@@ -1821,10 +1929,10 @@ function handlePlayerHit(playerId, bullet) {
     io.emit('game_state', { players, gameObjects });
     
     // Optional: System message about hit
-    io.emit('chat_message', {
-        username: 'System',
-        message: `${players[shooterId].username} hit ${players[playerId].username}! (+${BULLET_DAMAGE}/-${BULLET_DAMAGE} points)`
-    });
+    // io.emit('chat_message', {
+    //     username: 'System',
+    //     message: `${players[shooterId].username} hit ${players[playerId].username}! (+${BULLET_DAMAGE}/-${BULLET_DAMAGE} points)`
+    // });
 }
 setInterval(updateServerBullets, 33); // ~30 updates per second
 // Start the server
