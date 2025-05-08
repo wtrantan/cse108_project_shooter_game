@@ -1936,7 +1936,7 @@ function playAmmoSound() {
           
            
             // Draw rocks
-            drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
+           
             
             //draw ponds
             drawPonds();
@@ -1944,9 +1944,9 @@ function playAmmoSound() {
             drawGameObjects(gameObjects.trees, treeSprite, 'green');
             
             // Draw coins
-            drawCoins();
+           
             drawPlayers();
-
+            drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
             
              // Draw ammo packs
             drawAmmoPacks();
@@ -1954,8 +1954,10 @@ function playAmmoSound() {
         drawFishingProgress();
     }
     drawBaitPacks();
-    drawClouds();
+    drawCoins();
     drawBullets();
+    drawClouds();
+    
     // Draw fish inventory if open
     if (isInventoryOpen) {
         drawFishInventory();
@@ -2981,7 +2983,7 @@ window.addEventListener('keydown', (e) => {
 // 3. Add function to send delete request to server
 function deleteFish(fishId) {
     // Send delete request to server
-    socket.emit('delete_fish', { fishId: fishId });a
+    socket.emit('delete_fish', { fishId: fishId });
     
     // Optimistically remove from local inventory (server will validate)
     fishInventory = fishInventory.filter(fish => fish.id !== fishId);
