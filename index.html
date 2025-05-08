@@ -176,6 +176,16 @@
             border-radius: 5px;
             overflow: hidden;
         }
+        .baitDisplay {
+    position: absolute;
+    top: 70px;
+    left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+}
     </style>
 </head>
 <body>
@@ -214,9 +224,41 @@
     </div>
     
     <div id="gameContainer">
+
+<div id="instructionsCard" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000; width: 400px; max-width: 90vw; box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); font-family: Arial, sans-serif;">
+    <h2 style="text-align: center; color: #FFD700; margin-top: 0;">Welcome to Chat Lobby!</h2>
+    <div style="margin-bottom: 15px;">
+        <h3 style="color: #4CAF50; margin-bottom: 5px;">Movement</h3>
+        <p>Use <b>WASD</b> or <b>Arrow Keys</b> to move your character</p>
+    </div>
+    <div style="margin-bottom: 15px;">
+        <h3 style="color: #2196F3; margin-bottom: 5px;">Combat</h3>
+        <p>Press <b>Spacebar</b> to shoot</p>
+        <p>Collect blue ammo packs to reload</p>
+    </div>
+    <div style="margin-bottom: 15px;">
+        <h3 style="color: #FFC107; margin-bottom: 5px;">Fishing</h3>
+        <p>Stand in a pond and press <b>F</b> to start fishing</p>
+        <p><b>Click</b> when the indicator is in the green zone to catch a fish</p>
+    </div>
+    <div style="margin-bottom: 15px;">
+        <h3 style="color: #9C27B0; margin-bottom: 5px;">Inventory</h3>
+        <p>Press <b>E</b> to open your fish inventory</p>
+    </div>
+    <div style="margin-bottom: 15px;">
+        <h3 style="color: #FF5722; margin-bottom: 5px;">Scoring</h3>
+        <p>Collect coins to increase your score</p>
+        <p>Shooting other players increases your score</p>
+    </div>
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="closeInstructionsButton" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Got it!</button>
+    </div>
+</div>
+
         <canvas id="gameCanvas"></canvas>
         <div class="scoreDisplay" id="scoreDisplay">Score: 0</div>
         <div class="ammoDisplay" id="ammoDisplay">Ammo: 30/50</div>
+        <div class="baitDisplay" id="baitDisplay">Bait: 5/10</div>
         <div class="colorPicker">
             <p>Change your color:</p>
             <input type="color" id="colorPicker" value="#FF0000">
@@ -268,8 +310,13 @@ let fishingTimeout = null;
             rocks: [],
             coins: [],
             ammoPacks: [],
+            baitPacks: [],
             ponds: []
         };
+        let currentBait = 5; // Start with 5 bait
+const MAX_BAIT = 10; // Maximum bait capacity
+const BAIT_PACK_SIZE = 1; // Amount of bait in each pack
+const BAIT_PACK_SIZE_DISPLAY = 60; // Visual size of bait packs
         let currentAmmo = 5; // Start with 30 bullets
         const MAX_AMMO = 10; // Maximum ammo capacity
         const AMMO_PACK_SIZE = 5; // Amount of ammo in each pack
@@ -301,6 +348,8 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         // Game assets preloading
         const playerSprite = new Image();
         playerSprite.src = '/player-sprite.png';
+        const baitPackSprite = new Image();
+baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder    
         const pondSprite = new Image();
         pondSprite.src = '/'; // Create this image or use a placeholder
 //         const fishingRodSprite = new Image();
@@ -545,10 +594,13 @@ document.getElementById('toggleChatButton').addEventListener('click', toggleChat
             // Set up movement controls
             
 // Add click handler for fishing
-canvas.addEventListener('click', (e) => {
-    // Only allow fishing when not already fishing and not typing in chat
-    if (!isFishing && !chatInputFocused && isPlayerInWater() && currentAmmo > 0) {
-        startFishing();
+document.addEventListener('keydown', (e) => {
+    // Check if the 'F' key was pressed (case-insensitive)
+    if (e.key.toLowerCase() === 'f') {
+        // Only allow fishing when not already fishing and not typing in chat
+        if (!isFishing && !chatInputFocused && isPlayerInWater() && currentBait > 0) {
+            startFishing();
+        }
     }
 });
 
@@ -577,6 +629,7 @@ window.addEventListener('keydown', (e) => {
         }
         });
         updateAmmoDisplay();
+        updateBaitDisplay();
             // Set up minimap
             setupMinimap();
             
@@ -650,6 +703,10 @@ socket.on('fish_deleted', (data) => {
     currentAmmo = data.ammo;
     updateAmmoDisplay();
     });
+    socket.on('bait_update', (data) => {
+    currentBait = data.bait;
+    updateBaitDisplay();
+});
     socket.on('player_hit', (data) => {
     const { playerId, damage, shooterId } = data;
     
@@ -685,6 +742,23 @@ socket.on('fish_deleted', (data) => {
         }
     }
     
+    function enhanceInitGame() {
+    // Store the original initGame function
+    const originalInitGame = initGame;
+    
+    // Replace with enhanced version
+    window.initGame = function() {
+        // Call the original function
+        originalInitGame.apply(this, arguments);
+        
+        // Add our enhancements
+        checkShowInstructions();
+        addInstructionsButton();
+    };
+}
+
+// Execute the enhancement
+enhanceInitGame();
     // Update leaderboard
     updateLeaderboard();
 });
@@ -781,6 +855,7 @@ async function deleteAccount() {
         alert('Server error. Please try again later.');
     }
 }
+
         function setupMinimap() {
             const minimap = document.getElementById('minimap');
             const minimapCanvas = document.createElement('canvas');
@@ -844,6 +919,17 @@ async function deleteAccount() {
                 );
              }
         });
+          // Draw bait packs as brown dots
+    minimapCtx.fillStyle = '#8B4513';
+    gameObjects.baitPacks.forEach(baitPack => {
+        if (!baitPack.collected) {
+            minimapCtx.fillRect(
+                (baitPack.x / WORLD_WIDTH) * minimapWidth,
+                (baitPack.y / WORLD_HEIGHT) * minimapHeight,
+                3, 3
+            );
+        }
+    });
             // Draw players
             Object.values(players).forEach(player => {
                 minimapCtx.fillStyle = player.color || '#f00';
@@ -1176,6 +1262,20 @@ function updateBullets(deltaTime) {
 }
     }
 }
+function showBaitWarning() {
+    const baitDisplay = document.getElementById('baitDisplay');
+    if (baitDisplay) {
+        // Flash the bait display
+        baitDisplay.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+        setTimeout(() => {
+            baitDisplay.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        }, 300);
+        
+        // Show message in chat
+        addChatMessage('System', 'Out of bait! Find bait packs to resupply.');
+    }
+}
+
 function createBulletImpactEffect(x, y) {
     // Create impact particle effect
     for (let i = 0; i < 8; i++) {
@@ -1213,46 +1313,104 @@ function createBulletImpactEffect(x, y) {
 // Find the gameLoop function in your code and modify the part where you draw the ground
 // Replace the current ground drawing code with this:
 
-function gameLoop() {
-    if (!myId || !players[myId]) {
-        requestAnimationFrame(gameLoop);
-        return;
-    }
-    // Update player movement based on key states
-    updatePlayerMovement();
-    // Update camera position to follow player
-    const player = players[myId];
-    cameraX = player.x - canvas.width / 2 + PLAYER_SIZE / 2;
-    cameraY = player.y - canvas.height / 2 + PLAYER_SIZE / 2;
+function drawBaitPacks() {
+    gameObjects.baitPacks.forEach(baitPack => {
+        if (!baitPack.collected) {
+            const drawX = baitPack.x - cameraX;
+            const drawY = baitPack.y - cameraY;
+            
+            // Only draw if visible on screen
+            if (
+                drawX + BAIT_PACK_SIZE_DISPLAY >= 0 &&
+                drawX <= canvas.width &&
+                drawY + BAIT_PACK_SIZE_DISPLAY >= 0 &&
+                drawY <= canvas.height
+            ) {
+                // Calculate bob effect for animation
+                baitPack.bobOffset = baitPack.bobOffset || 0;
+                baitPack.bobDirection = baitPack.bobDirection || 1;
+                baitPack.bobOffset += 0.05 * baitPack.bobDirection;
+                
+                if (baitPack.bobOffset > 5 || baitPack.bobOffset < 0) {
+                    baitPack.bobDirection *= -1;
+                }
+                
+                // Draw with vertical bobbing animation
+                const bobY = drawY + baitPack.bobOffset;
+                
+                // Try to draw sprite
+                try {
+                    ctx.drawImage(baitPackSprite, drawX, bobY, BAIT_PACK_SIZE_DISPLAY, BAIT_PACK_SIZE_DISPLAY);
+                } catch (e) {
+                    // Fallback to drawn worm if sprite fails to load
+                    // Draw a worm-like bait pack
+                    ctx.fillStyle = '#8B4513'; // Brown for worm body
+                    ctx.fillRect(drawX + 5, bobY + 10, BAIT_PACK_SIZE_DISPLAY - 10, BAIT_PACK_SIZE_DISPLAY - 20);
+                    
+                    // Draw worm details
+                    ctx.fillStyle = '#A0522D'; // Darker brown for segments
+                    ctx.fillRect(drawX + 8, bobY + 15, BAIT_PACK_SIZE_DISPLAY - 16, 3);
+                    ctx.fillRect(drawX + 8, bobY + 22, BAIT_PACK_SIZE_DISPLAY - 16, 3);
+                    
+                    // Draw worm head
+                    ctx.fillStyle = '#CD853F'; // Lighter brown for head
+                    ctx.beginPath();
+                    ctx.arc(drawX + 5, bobY + BAIT_PACK_SIZE_DISPLAY/2, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw a "B" on the bait pack (for "Bait")
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('B', drawX + BAIT_PACK_SIZE_DISPLAY/2 + 5, bobY + BAIT_PACK_SIZE_DISPLAY/2 + 5);
+                }
+            }
+        }
+    });
+}
+// 9. Add bait pack collection function
+function checkBaitPackCollection(player) {
+    // Define player hitbox
+    const playerHitbox = {
+        x: player.x + 10,
+        y: player.y + 10,
+        width: PLAYER_SIZE - 20,
+        height: PLAYER_SIZE - 20
+    };
     
-    // Clamp camera to world bounds
-    cameraX = Math.max(0, Math.min(cameraX, WORLD_WIDTH - canvas.width));
-    cameraY = Math.max(0, Math.min(cameraY, WORLD_HEIGHT - canvas.height));
-    
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw sky background
-    ctx.fillStyle = '#87CEEB';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw pixelated grass background
-    drawPixelatedGrass();
-    
-    // Draw clouds (optional)
-    drawClouds();
-    
-    // Rest of your drawing code...
-    drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
-    drawGameObjects(gameObjects.trees, treeSprite, 'green');
-    drawCoins();
-    drawAmmoPacks();
-    drawPlayers();
-    updateBullets(16);
-    drawBullets();
-    
-    // Continue the game loop
-    requestAnimationFrame(gameLoop);
+    // Check collision with each bait pack
+    gameObjects.baitPacks.forEach(baitPack => {
+        if (!baitPack.collected) {
+            // Define bait pack hitbox
+            const baitPackHitbox = {
+                x: baitPack.x + 5,
+                y: baitPack.y + 5,
+                width: BAIT_PACK_SIZE_DISPLAY - 10,
+                height: BAIT_PACK_SIZE_DISPLAY - 10
+            };
+            
+            // Check hitbox overlap
+            if (
+                playerHitbox.x < baitPackHitbox.x + baitPackHitbox.width &&
+                playerHitbox.x + playerHitbox.width > baitPackHitbox.x &&
+                playerHitbox.y < baitPackHitbox.y + baitPackHitbox.height &&
+                playerHitbox.y + playerHitbox.height > baitPackHitbox.y
+            ) {
+                // Collect the bait pack (server will validate)
+                socket.emit('collect_bait', baitPack.id);
+                
+                // Play bait collection sound
+                playBaitSound();
+            }
+        }
+    });
+}
+
+// 10. Add bait collection sound
+function playBaitSound() {
+    const baitSound = new Audio('/bait-sound.mp3'); // Create this sound or use a placeholder
+    baitSound.volume = 0.4;
+    baitSound.play().catch(e => console.log('Audio play failed:', e));
 }
 
 // Add this new function to create the pixelated grass effect
@@ -1794,7 +1952,7 @@ function playAmmoSound() {
             if (isFishing) {
         drawFishingProgress();
     }
-    
+    drawBaitPacks();
     // Draw fish inventory if open
     if (isInventoryOpen) {
         drawFishInventory();
@@ -1853,10 +2011,10 @@ function playAmmoSound() {
         players[myId].x = newX;
         players[myId].y = newY;
         
-        // Check for coin and ammo pack collection
+        // Check for coin and ammo pack and bait collection
         checkCoinCollection(player);
         checkAmmoPackCollection(player);
-        
+        checkBaitPackCollection(player);
         // Send updated position to server
         const now = Date.now();
         if (now - lastMovementUpdate >= MOVEMENT_UPDATE_INTERVAL) {
@@ -2108,10 +2266,21 @@ function drawClouds() {
 function startFishing() {
     if (isFishing) return;
     
+    // Check if player has bait
+    if (currentBait <= 0) {
+        // Show message that player needs bait
+        addChatMessage('System', 'You need bait to fish! Find bait packs around the map.');
+        return;
+    }
+    
     isFishing = true;
     fishingProgress = 0;
     fishingSuccess = false;
     fishingResult = null;
+    
+    // Use bait instead of ammo
+    currentBait--;
+    updateBaitDisplay();
     
     // Show fishing message
     addChatMessage('System', 'Fishing started! Click when the indicator is in the green zone to catch a fish!');
@@ -2128,6 +2297,9 @@ function startFishing() {
             addChatMessage('System', 'You missed your chance! The fish got away.');
         }
     }, 3000); // 3 seconds to click
+
+    // Tell server we've used bait
+    socket.emit('update_bait', { bait: currentBait });
 }
 
 // Handle fishing progress
@@ -2441,7 +2613,78 @@ function getRarityColor(rarity) {
         default: return '#AAAAAA';
     }
 }
+document.getElementById('closeInstructionsButton').addEventListener('click', function() {
+    hideInstructions();
+});
 
+function updateBaitDisplay() {
+    const baitDisplay = document.getElementById('baitDisplay');
+    if (baitDisplay) {
+        baitDisplay.textContent = `Bait: ${currentBait}/${MAX_BAIT}`;
+        
+        // Change color based on bait level
+        if (currentBait <= 2) {
+            baitDisplay.style.color = '#FF0000'; // Red for low bait
+        } else if (currentBait <= 4) {
+            baitDisplay.style.color = '#FFA500'; // Orange for medium bait
+        } else {
+            baitDisplay.style.color = '#000000'; // Black for normal
+        }
+    }
+}
+// Function to hide instructions
+function hideInstructions() {
+    const instructionsCard = document.getElementById('instructionsCard');
+    instructionsCard.style.opacity = '0';
+    instructionsCard.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+        instructionsCard.style.display = 'none';
+    }, 300);
+    
+    // Save to localStorage so it doesn't show on every login
+    localStorage.setItem('instructionsShown', 'true');
+}
+
+// Check localStorage when game initializes
+function checkShowInstructions() {
+    const instructionsCard = document.getElementById('instructionsCard');
+    
+    // Only show instructions if they haven't seen them before
+    if (localStorage.getItem('instructionsShown') === 'true') {
+        instructionsCard.style.display = 'none';
+    } else {
+        instructionsCard.style.display = 'block';
+    }
+}
+
+// Add instructions toggle button to the UI
+function addInstructionsButton() {
+    const button = document.createElement('button');
+    button.textContent = 'Game Help';
+    button.style.position = 'absolute';
+    button.style.top = '10px';
+    button.style.left = '50%';
+    button.style.transform = 'translateX(-50%)';
+    button.style.backgroundColor = '#4CAF50';
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.padding = '8px 15px';
+    button.style.cursor = 'pointer';
+    button.style.zIndex = '1000';
+    
+    button.addEventListener('click', function() {
+        const instructionsCard = document.getElementById('instructionsCard');
+        if (instructionsCard.style.display === 'none') {
+            instructionsCard.style.display = 'block';
+            instructionsCard.style.opacity = '1';
+        } else {
+            hideInstructions();
+        }
+    });
+    
+    document.getElementById('gameContainer').appendChild(button);
+}
 // Play sounds with error handling
 function playSound(soundFile, volume = 0.5) {
     try {

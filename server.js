@@ -89,6 +89,7 @@ const gameObjects = {
     rocks: [],
     coins: [],
     ammoPacks: [], // Add this new array
+    baitPacks: [],
     ponds: [] // New ponds array
 };
 const fishTypes = [
@@ -213,7 +214,7 @@ function generateGameObjects(mapWidth, mapHeight) {
     for (let i = 0; i < pondCount; i++) {
         // Make ponds different sizes
         const pondWidth = Math.floor(Math.random() * 150) + 200; // 200-350
-        const pondHeight = Math.floor(Math.random() * 100) + 150; // 150-250
+        const pondHeight = Math.floor(Math.random() * 300) + 150; // 150-250
         
         // Find a location that doesn't overlap with trees or rocks
         let validLocation = false;
@@ -289,8 +290,41 @@ function generateGameObjects(mapWidth, mapHeight) {
             collected: false
         });
     }
-    
-    console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${coinCount} coins, and ${ammoPackCount} ammo packs`);
+     // Generate bait packs (3-7) - tend to place closer to water
+     const baitPackCount = Math.floor(Math.random() * 5) + 3;
+     for (let i = 0; i < baitPackCount; i++) {
+         // Try to place some bait packs near ponds
+         let baitX, baitY;
+         
+         if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
+             // Choose a random pond
+             const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
+             
+             // Place bait pack near the pond (with some randomness)
+             const angle = Math.random() * Math.PI * 2;
+             const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
+             
+             baitX = pond.x + pond.width/2 + Math.cos(angle) * distance;
+             baitY = pond.y + pond.height/2 + Math.sin(angle) * distance;
+             
+             // Ensure bait pack is within map bounds
+             baitX = Math.max(0, Math.min(baitX, mapWidth - 30));
+             baitY = Math.max(0, Math.min(baitY, mapHeight - 30));
+         } else {
+             // Random position anywhere on the map
+             baitX = Math.random() * (mapWidth - 30);
+             baitY = Math.random() * (mapHeight - 30);
+         }
+         
+         gameObjects.baitPacks.push({
+             id: `bait-${i}`,
+             x: baitX,
+             y: baitY,
+             collected: false
+         });
+     }
+     
+     console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${coinCount} coins, ${ammoPackCount} ammo packs, and ${baitPackCount} bait packs`);
 }
 function updateServerBullets() {
     const currentTime = Date.now();
@@ -962,14 +996,17 @@ io.on('connection', (socket) => {
         usernames.add(username);
         
         // Create player with random position and saved color
+        const safePosition = findSafeSpawnPosition(2000, 1500, 50);
+    
         players[socket.id] = {
             id: socket.id,
             username: username,
-            x: Math.random() * 800,
-            y: Math.random() * 500,
+            x: safePosition.x,
+            y: safePosition.y,
             color: color,
-            score: 0,  // Initialize score
-            ammo: 30 // Start with 30 bullets
+            score: 0,
+            ammo: 10,
+            bait: 5
         };
          // Generate game objects if first player
         if (Object.keys(players).length === 1) {
@@ -1014,7 +1051,13 @@ socket.on('catch_fish', () => {
                 break;
             }
         }
-        
+        if (player.bait <= 0) {
+            socket.emit('chat_message', {
+                username: 'System',
+                message: 'You need bait to fish! Find bait packs around the map.'
+            });
+            return;
+        }
         if (nearWater) {
             // Determine which fish is caught based on rarity chances
             const caughtFish = determineCaughtFish();
@@ -1208,6 +1251,85 @@ socket.on('shoot_bullet', (bulletData) => {
         io.emit('bullets_update', bullets);
     }
 });
+socket.on('collect_bait', (baitPackId) => {
+    if (players[socket.id]) {
+        const username = players[socket.id].username;
+        
+        // Find the bait pack
+        const baitPackIndex = gameObjects.baitPacks.findIndex(bp => bp.id === baitPackId);
+        
+        if (baitPackIndex !== -1 && !gameObjects.baitPacks[baitPackIndex].collected) {
+            // Mark bait pack as collected
+            gameObjects.baitPacks[baitPackIndex].collected = true;
+            
+            // Increase player bait
+            const BAIT_PACK_SIZE = 1; // Amount of bait in each pack
+            const MAX_BAIT = 10; // Maximum bait capacity
+            players[socket.id].bait = Math.min(players[socket.id].bait + BAIT_PACK_SIZE, MAX_BAIT);
+            
+            // Broadcast updated game state
+            io.emit('game_state', { players, gameObjects });
+            
+            // Send notification
+            io.emit('chat_message', {
+                username: 'System',
+                message: `${username} collected fishing bait! Bait: ${players[socket.id].bait}`
+            });
+            
+            // Send direct bait update to the client
+            socket.emit('bait_update', { bait: players[socket.id].bait });
+            
+            // Generate a new bait pack after some time
+            setTimeout(() => {
+                if (Object.keys(players).length > 0) {  // Only if players still in game
+                    // Try to place some bait packs near ponds
+                    let baitX, baitY;
+                    
+                    if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
+                        // Choose a random pond
+                        const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
+                        
+                        // Place bait pack near the pond (with some randomness)
+                        const angle = Math.random() * Math.PI * 2;
+                        const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
+                        
+                        baitX = pond.x + pond.width/2 + Math.cos(angle) * distance;
+                        baitY = pond.y + pond.height/2 + Math.sin(angle) * distance;
+                        
+                        // Ensure bait pack is within map bounds
+                        baitX = Math.max(0, Math.min(baitX, 2000 - 30));
+                        baitY = Math.max(0, Math.min(baitY, 1500 - 30));
+                    } else {
+                        // Random position anywhere on the map
+                        baitX = Math.random() * (2000 - 30);
+                        baitY = Math.random() * (1500 - 30);
+                    }
+                    
+                    const newBaitPack = {
+                        id: `bait-${Date.now()}`,
+                        x: baitX,
+                        y: baitY,
+                        collected: false
+                    };
+                    
+                    // Remove collected bait pack and add new one
+                    gameObjects.baitPacks = gameObjects.baitPacks.filter(b => !b.collected);
+                    gameObjects.baitPacks.push(newBaitPack);
+                    
+                    // Broadcast updated game objects
+                    io.emit('game_state', { players, gameObjects });
+                }
+            }, 15000);  // Generate new bait pack after 15 seconds
+        }
+    }
+});
+
+// 5. Add handler for updating bait count
+socket.on('update_bait', (data) => {
+    if (players[socket.id]) {
+        players[socket.id].bait = data.bait;
+    }
+});
 socket.on('collect_ammo', (ammoPackId) => {
     if (players[socket.id]) {
         const username = players[socket.id].username;
@@ -1257,11 +1379,11 @@ socket.on('collect_ammo', (ammoPackId) => {
 });
 
 // Update player ammo
-socket.on('update_ammo', (data) => {
-    if (players[socket.id]) {
-        players[socket.id].ammo = data.ammo;
-    }
-});
+// socket.on('update_ammo', (data) => {
+//     if (players[socket.id]) {
+//         players[socket.id].ammo = data.ammo;
+//     }
+// });
 
 
     // Add a new handler for coin collection
@@ -1554,6 +1676,110 @@ function checkServerBulletObstacleCollision(bullet) {
     
     return false;
 }
+// Find a safe spawn position that doesn't overlap with objects
+function findSafeSpawnPosition(worldWidth, worldHeight, playerSize) {
+    const padding = 50; // Add some padding from the edges
+    let attempts = 0;
+    const maxAttempts = 30; // Limit number of attempts to prevent infinite loops
+    
+    while (attempts < maxAttempts) {
+        // Generate random position
+        const x = Math.random() * (worldWidth - playerSize - padding * 2) + padding;
+        const y = Math.random() * (worldHeight - playerSize - padding * 2) + padding;
+        
+        // Check if position collides with any game objects
+        if (!isPositionColliding(x, y, playerSize)) {
+            return { x, y };
+        }
+        
+        attempts++;
+    }
+    
+    // If no safe position found after max attempts, use a predetermined safe area
+    // This could be a spawn area you've manually verified is clear of obstacles
+    return { 
+        x: worldWidth / 2, 
+        y: worldHeight / 2 
+    };
+}
+// Check if a position collides with any game objects
+function isPositionColliding(x, y, playerSize) {
+    const playerHitbox = {
+        x: x + 10,
+        y: y + 10,
+        width: playerSize - 20,
+        height: playerSize - 20
+    };
+    
+    // Check collision with trees
+    for (const tree of gameObjects.trees) {
+        const treeSize = tree.size || 70;
+        const treeHitbox = {
+            x: tree.x + treeSize * 0.2,
+            y: tree.y + treeSize * 0.5,
+            width: treeSize * 0.6,
+            height: treeSize * 0.5
+        };
+        
+        if (
+            playerHitbox.x < treeHitbox.x + treeHitbox.width &&
+            playerHitbox.x + playerHitbox.width > treeHitbox.x &&
+            playerHitbox.y < treeHitbox.y + treeHitbox.height &&
+            playerHitbox.y + playerHitbox.height > treeHitbox.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    // Check collision with rocks
+    for (const rock of gameObjects.rocks) {
+        const rockSize = rock.size || 40;
+        const rockHitbox = {
+            x: rock.x + rockSize * 0.1,
+            y: rock.y + rockSize * 0.1,
+            width: rockSize * 0.8,
+            height: rockSize * 0.8
+        };
+        
+        if (
+            playerHitbox.x < rockHitbox.x + rockHitbox.width &&
+            playerHitbox.x + playerHitbox.width > rockHitbox.x &&
+            playerHitbox.y < rockHitbox.y + rockHitbox.height &&
+            playerHitbox.y + playerHitbox.height > rockHitbox.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    // Check collision with ponds (players should be able to spawn in water, but it's optional)
+    for (const pond of gameObjects.ponds) {
+        // Simple rectangular collision check for ponds
+        if (
+            playerHitbox.x < pond.x + pond.width &&
+            playerHitbox.x + playerHitbox.width > pond.x &&
+            playerHitbox.y < pond.y + pond.height &&
+            playerHitbox.y + playerHitbox.height > pond.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    // Check collision with other players
+    for (const id in players) {
+        const player = players[id];
+        if (
+            playerHitbox.x < player.x + playerSize &&
+            playerHitbox.x + playerHitbox.width > player.x &&
+            playerHitbox.y < player.y + playerSize &&
+            playerHitbox.y + playerHitbox.height > player.y
+        ) {
+            return true; // Collision detected
+        }
+    }
+    
+    return false; // No collision
+}
+
 function handlePlayerHit(playerId, bullet) {
     const shooterId = bullet.playerId;
     const BULLET_DAMAGE = 10; // Make sure this is defined
