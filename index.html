@@ -347,7 +347,7 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         
         // Game assets preloading
         const playerSprite = new Image();
-        playerSprite.src = '/player-sprite.png';
+        playerSprite.src = '/player-penguin.png';
         const baitPackSprite = new Image();
 baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder    
         const pondSprite = new Image();
@@ -1408,7 +1408,7 @@ function checkBaitPackCollection(player) {
 
 // 10. Add bait collection sound
 function playBaitSound() {
-    const baitSound = new Audio('/bait-sound.mp3'); // Create this sound or use a placeholder
+    const baitSound = new Audio('/bait.mp3'); // Create this sound or use a placeholder
     baitSound.volume = 0.4;
     baitSound.play().catch(e => console.log('Audio play failed:', e));
 }
@@ -2456,60 +2456,114 @@ function drawFishInventory() {
         ctx.textAlign = 'center';
         ctx.fillText('No fish caught yet. Go fishing!', panelX + panelWidth/2, panelY + panelHeight/2);
     } else {
-        // Display fish in a grid
+        // Display fish in a grid with scrolling
         const itemSize = 100;
         const columns = Math.floor((panelWidth - 40) / itemSize);
         const startX = panelX + (panelWidth - (columns * itemSize)) / 2;
-        const startY = panelY + 80;
         
+        // Set up scrollable area
+        const contentHeight = Math.ceil(fishInventory.length / columns) * itemSize;
+        const viewportHeight = panelHeight - 150; // Space for title and stats
+        
+        // Create clipPath for the scrollable area
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(panelX + 10, panelY + 70, panelWidth - 20, viewportHeight);
+        ctx.clip();
+        
+        // Apply scroll offset
+        const scrollY = panelY + 80 - inventoryScrollOffset;
+        
+        // Draw fish items
         fishInventory.forEach((fish, index) => {
             const col = index % columns;
             const row = Math.floor(index / columns);
             const x = startX + col * itemSize;
-            const y = startY + row * itemSize;
+            const y = scrollY + row * itemSize;
             
-            // Draw fish slot background
-            ctx.fillStyle = '#F0F0F0';
-            ctx.fillRect(x, y, itemSize - 10, itemSize - 10);
+            // Only draw if it would be visible (optimization)
+            if (y + itemSize >= panelY + 70 && y <= panelY + 70 + viewportHeight) {
+                // Draw fish slot background
+                ctx.fillStyle = '#F0F0F0';
+                ctx.fillRect(x, y, itemSize - 10, itemSize - 10);
+                
+                // Draw fish sprite if available
+                try {
+                    const fishSprite = fishSprites[`fish${fish.typeId}`];
+                    ctx.drawImage(fishSprite, x + 10, y + 10, itemSize - 30, itemSize - 50);
+                } catch (e) {
+                    // Fallback to colored rectangle if sprite not available
+                    ctx.fillStyle = getFishColor(fish.typeId);
+                    ctx.fillRect(x + 10, y + 10, itemSize - 30, itemSize - 50);
+                }
+                
+                // Draw fish details
+                ctx.fillStyle = '#333333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(fish.name, x + (itemSize - 10)/2, y + itemSize - 35);
+                ctx.fillText(`${fish.size} cm`, x + (itemSize - 10)/2, y + itemSize - 20);
+                
+                // Draw rarity indicator
+                const rarityColor = getRarityColor(fish.rarity);
+                ctx.fillStyle = rarityColor;
+                ctx.fillRect(x + (itemSize - 40)/2, y + itemSize - 15, 40, 10);
+                
+                // Add delete button for each fish
+                ctx.fillStyle = '#FF3B30';
+                ctx.fillRect(x + itemSize - 25, y + 5, 15, 15);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('×', x + itemSize - 17, y + 15);
+                
+                // Store button coordinates for click detection, with scroll offset applied
+                fish.deleteButton = {
+                    x: x + itemSize - 25,
+                    y: y + inventoryScrollOffset - (scrollY - (panelY + 80)), // Adjust for scroll position
+                    width: 15,
+                    height: 15
+                };
+            }
+        });
+        
+        // Restore the context to remove clip
+        ctx.restore();
+        
+        // Draw scrollbar if needed
+        if (contentHeight > viewportHeight) {
+            const scrollbarHeight = (viewportHeight / contentHeight) * viewportHeight;
+            const scrollbarPosition = (inventoryScrollOffset / (contentHeight - viewportHeight)) * (viewportHeight - scrollbarHeight);
             
-            // Draw fish sprite if available
-            try {
-                const fishSprite = fishSprites[`fish${fish.typeId}`];
-                ctx.drawImage(fishSprite, x + 10, y + 10, itemSize - 30, itemSize - 50);
-            } catch (e) {
-                // Fallback to colored rectangle if sprite not available
-                ctx.fillStyle = getFishColor(fish.typeId);
-                ctx.fillRect(x + 10, y + 10, itemSize - 30, itemSize - 50);
+            // Draw scroll track
+            ctx.fillStyle = '#EEEEEE';
+            ctx.fillRect(panelX + panelWidth - 20, panelY + 70, 10, viewportHeight);
+            
+            // Draw scrollbar
+            ctx.fillStyle = '#BBBBBB';
+            ctx.fillRect(panelX + panelWidth - 20, panelY + 70 + scrollbarPosition, 10, scrollbarHeight);
+            
+            // Draw scroll indicators if needed
+            if (inventoryScrollOffset > 0) {
+                // Up arrow
+                ctx.fillStyle = '#888888';
+                ctx.beginPath();
+                ctx.moveTo(panelX + panelWidth - 15, panelY + 65);
+                ctx.lineTo(panelX + panelWidth - 25, panelY + 65);
+                ctx.lineTo(panelX + panelWidth - 20, panelY + 55);
+                ctx.fill();
             }
             
-            // Draw fish details
-            ctx.fillStyle = '#333333';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(fish.name, x + (itemSize - 10)/2, y + itemSize - 35);
-            ctx.fillText(`${fish.size} cm`, x + (itemSize - 10)/2, y + itemSize - 20);
-            
-            // Draw rarity indicator
-            const rarityColor = getRarityColor(fish.rarity);
-            ctx.fillStyle = rarityColor;
-            ctx.fillRect(x + (itemSize - 40)/2, y + itemSize - 15, 40, 10);
-            
-            // NEW: Add delete button for each fish
-            ctx.fillStyle = '#FF3B30';
-            ctx.fillRect(x + itemSize - 25, y + 5, 15, 15);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('×', x + itemSize - 17, y + 15);
-            
-            // Store button coordinates for click detection
-            fish.deleteButton = {
-                x: x + itemSize - 25,
-                y: y + 5,
-                width: 15,
-                height: 15
-            };
-        });
+            if (inventoryScrollOffset < contentHeight - viewportHeight) {
+                // Down arrow
+                ctx.fillStyle = '#888888';
+                ctx.beginPath();
+                ctx.moveTo(panelX + panelWidth - 15, panelY + viewportHeight + 75);
+                ctx.lineTo(panelX + panelWidth - 25, panelY + viewportHeight + 75);
+                ctx.lineTo(panelX + panelWidth - 20, panelY + viewportHeight + 85);
+                ctx.fill();
+            }
+        }
     }
     
     // Stats section
@@ -2529,11 +2583,11 @@ function drawFishInventory() {
     ctx.fillText(`Unique Types: ${uniqueTypes}/10`, panelX + 30, statsY + 25);
     ctx.fillText(`Largest Fish: ${largestFish} cm`, panelX + panelWidth - 200, statsY);
     
-    // Handle clicks in inventory (close button or delete fish buttons)
+    // Handle clicks in inventory
     canvas.onclick = handleInventoryClick;
 }
 
-// 2. Add a function to handle inventory clicks
+// Updated handleInventoryClick to handle scrolling
 function handleInventoryClick(e) {
     const mouseX = e.clientX;
     const mouseY = e.clientY;
@@ -2561,27 +2615,242 @@ function handleInventoryClick(e) {
         return;
     }
     
-    // Check if any fish delete button was clicked
-    for (const fish of fishInventory) {
-        if (fish.deleteButton && 
-            canvasX >= fish.deleteButton.x &&
-            canvasX <= fish.deleteButton.x + fish.deleteButton.width &&
-            canvasY >= fish.deleteButton.y &&
-            canvasY <= fish.deleteButton.y + fish.deleteButton.height
-        ) {
-            // Show confirmation dialog
-            if (confirm(`Are you sure you want to remove this ${fish.rarity} ${fish.name}?`)) {
-                deleteFish(fish.id);
+    // Get scrollable area dimensions
+    const viewportHeight = panelHeight - 150;
+    const itemSize = 100;
+    const columns = Math.floor((panelWidth - 40) / itemSize);
+    const contentHeight = Math.ceil(fishInventory.length / columns) * itemSize;
+    
+    // Check if scrollbar area is clicked
+    if (contentHeight > viewportHeight && 
+        canvasX >= panelX + panelWidth - 20 && 
+        canvasX <= panelX + panelWidth - 10 &&
+        canvasY >= panelY + 70 && 
+        canvasY <= panelY + 70 + viewportHeight) {
+        
+        // Calculate new scroll position based on click position
+        const clickPosition = (canvasY - (panelY + 70)) / viewportHeight;
+        inventoryScrollOffset = clickPosition * (contentHeight - viewportHeight);
+        
+        // Redraw inventory with new scroll position
+        drawFishInventory();
+        return;
+    }
+    
+    // Check if scrollable area is clicked (for fish items)
+    if (canvasX >= panelX + 10 && 
+        canvasX <= panelX + panelWidth - 30 &&
+        canvasY >= panelY + 70 && 
+        canvasY <= panelY + 70 + viewportHeight) {
+        
+        // Check if any fish delete button was clicked
+        for (const fish of fishInventory) {
+            if (fish.deleteButton && 
+                canvasX >= fish.deleteButton.x &&
+                canvasX <= fish.deleteButton.x + fish.deleteButton.width &&
+                canvasY >= fish.deleteButton.y &&
+                canvasY <= fish.deleteButton.y + fish.deleteButton.height
+            ) {
+                // Show confirmation dialog
+                if (confirm(`Are you sure you want to remove this ${fish.rarity} ${fish.name}?`)) {
+                    deleteFish(fish.id);
+                }
+                return;
             }
-            return;
         }
     }
 }
 
+// Variables for scroll handling
+let inventoryScrollOffset = 0;
+let isDraggingScrollbar = false;
+let lastMouseY = 0;
+
+// Add mouse wheel handler for scrolling the inventory
+function handleInventoryScroll(e) {
+    if (!isInventoryOpen) return;
+    
+    e.preventDefault();
+    
+    // Get panel dimensions
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    const panelX = (canvas.width - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+    
+    // Get mouse position relative to canvas
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Check if mouse is over the inventory panel
+    if (
+        mouseX >= panelX && 
+        mouseX <= panelX + panelWidth &&
+        mouseY >= panelY && 
+        mouseY <= panelY + panelHeight
+    ) {
+        // Calculate scroll bounds
+        const itemSize = 100;
+        const columns = Math.floor((panelWidth - 40) / itemSize);
+        const contentHeight = Math.ceil(fishInventory.length / columns) * itemSize;
+        const viewportHeight = panelHeight - 150;
+        
+        if (contentHeight > viewportHeight) {
+            // Update scroll offset based on wheel direction
+            inventoryScrollOffset += e.deltaY * 0.5; // Adjust scroll speed
+            
+            // Clamp scroll offset to valid range
+            inventoryScrollOffset = Math.max(0, Math.min(contentHeight - viewportHeight, inventoryScrollOffset));
+            
+            // Redraw inventory with new scroll position
+            drawFishInventory();
+        }
+    }
+}
+
+// Add mouse down handler for dragging the scrollbar
+function handleMouseDown(e) {
+    if (!isInventoryOpen) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Calculate panel dimensions
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    const panelX = (canvas.width - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+    
+    // Check if scrollbar is clicked
+    const viewportHeight = panelHeight - 150;
+    if (
+        mouseX >= panelX + panelWidth - 20 && 
+        mouseX <= panelX + panelWidth - 10 &&
+        mouseY >= panelY + 70 && 
+        mouseY <= panelY + 70 + viewportHeight
+    ) {
+        isDraggingScrollbar = true;
+        lastMouseY = mouseY;
+    }
+}
+
+// Add mouse move handler for dragging the scrollbar
+function handleMouseMove(e) {
+    if (!isInventoryOpen || !isDraggingScrollbar) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseY = e.clientY - rect.left;
+    
+    // Calculate mouse movement
+    const deltaY = mouseY - lastMouseY;
+    lastMouseY = mouseY;
+    
+    // Calculate panel dimensions
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    
+    // Calculate scroll bounds
+    const itemSize = 100;
+    const columns = Math.floor((panelWidth - 40) / itemSize);
+    const contentHeight = Math.ceil(fishInventory.length / columns) * itemSize;
+    const viewportHeight = panelHeight - 150;
+    
+    if (contentHeight > viewportHeight) {
+        // Update scroll offset based on drag amount
+        const scrollRatio = contentHeight / viewportHeight;
+        inventoryScrollOffset += deltaY * scrollRatio;
+        
+        // Clamp scroll offset to valid range
+        inventoryScrollOffset = Math.max(0, Math.min(contentHeight - viewportHeight, inventoryScrollOffset));
+        
+        // Redraw inventory with new scroll position
+        drawFishInventory();
+    }
+}
+
+// Add mouse up handler to end scrollbar dragging
+function handleMouseUp() {
+    isDraggingScrollbar = false;
+}
+
+// Initialize event listeners for scrolling
+function initScrollListeners() {
+    canvas.addEventListener('wheel', handleInventoryScroll, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseUp);
+}
+
+// Update toggleFishInventory to initialize scroll position
+function toggleFishInventory() {
+    isInventoryOpen = !isInventoryOpen;
+    
+    if (isInventoryOpen) {
+        // Reset scroll position when opening inventory
+        inventoryScrollOffset = 0;
+        
+        // Request latest fish inventory from server
+        socket.emit('get_fish_inventory');
+        
+        // Make sure scroll listeners are initialized
+        initScrollListeners();
+    } else {
+        // Clean up when closing inventory
+        canvas.onclick = null;
+    }
+}
+
+// Add keyboard controls for inventory scrolling
+window.addEventListener('keydown', (e) => {
+    if (!isInventoryOpen) return;
+    
+    // Calculate panel dimensions
+    const panelWidth = Math.min(canvas.width - 100, 800);
+    const panelHeight = Math.min(canvas.height - 100, 600);
+    
+    // Calculate scroll bounds
+    const itemSize = 100;
+    const columns = Math.floor((panelWidth - 40) / itemSize);
+    const contentHeight = Math.ceil(fishInventory.length / columns) * itemSize;
+    const viewportHeight = panelHeight - 150;
+    
+    if (contentHeight > viewportHeight) {
+        const scrollAmount = itemSize; // Scroll one row at a time
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            inventoryScrollOffset = Math.min(contentHeight - viewportHeight, inventoryScrollOffset + scrollAmount);
+            drawFishInventory();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            inventoryScrollOffset = Math.max(0, inventoryScrollOffset - scrollAmount);
+            drawFishInventory();
+        } else if (e.key === 'PageDown') {
+            e.preventDefault();
+            inventoryScrollOffset = Math.min(contentHeight - viewportHeight, inventoryScrollOffset + viewportHeight);
+            drawFishInventory();
+        } else if (e.key === 'PageUp') {
+            e.preventDefault();
+            inventoryScrollOffset = Math.max(0, inventoryScrollOffset - viewportHeight);
+            drawFishInventory();
+        } else if (e.key === 'Home') {
+            e.preventDefault();
+            inventoryScrollOffset = 0;
+            drawFishInventory();
+        } else if (e.key === 'End') {
+            e.preventDefault();
+            inventoryScrollOffset = contentHeight - viewportHeight;
+            drawFishInventory();
+        }
+    }
+});
 // 3. Add function to send delete request to server
 function deleteFish(fishId) {
     // Send delete request to server
-    socket.emit('delete_fish', { fishId: fishId });
+    socket.emit('delete_fish', { fishId: fishId });a
     
     // Optimistically remove from local inventory (server will validate)
     fishInventory = fishInventory.filter(fish => fish.id !== fishId);
