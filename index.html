@@ -705,12 +705,12 @@ window.addEventListener('keydown', (e) => {
 socket.on('fish_deleted', (data) => {
     if (data.success) {
         // Server confirmed deletion, show notification
-        addChatMessage('System', `${data.fishName} has been removed from your inventory.`);
+        //addChatMessage('System', `${data.fishName} has been removed from your inventory.`);
         
         // Request updated inventory to ensure client and server are in sync
         socket.emit('get_fish_inventory');
     } else {
-        // Handle error
+        // Handle errors
         addChatMessage('System', 'Failed to remove fish: ' + (data.error || 'Unknown error'));
     }
 });
@@ -1204,7 +1204,7 @@ function showAmmoWarning() {
         }, 300);
         
         // Show message in chat
-        addChatMessage('System', 'Out of ammo! Find ammo packs to reload.');
+       // addChatMessage('System', 'Out of ammo! Find ammo packs to reload.');
     }
 }
 // 5. Add bullet update and rendering functions
