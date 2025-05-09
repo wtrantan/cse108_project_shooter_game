@@ -1424,7 +1424,117 @@ function checkBaitPackCollection(player) {
 function playBaitSound() {
     playSound('bait.mp3', 0.3);
 }
+function drawPixelatedSnow() {
+    // Use larger pixels for better performance
+    const pixelSize = 16; // Larger pixels for better performance
+    
+    // Calculate visible area based on camera position
+    // Only draw pixels that are actually visible on screen
+    const startX = Math.floor(cameraX / pixelSize) * pixelSize;
+    const startY = Math.floor(cameraY / pixelSize) * pixelSize;
+    const endX = startX + canvas.width + pixelSize;
+    const endY = startY + canvas.height + pixelSize;
+    
+    // Snow color palette
+    const snowColors = [
+        '#FFFFFF', // Pure white (main color)
+        '#F0F8FF', // Alice blue (very light blue-white)
+        '#F5F5F5', // White smoke (off-white)
+        '#E6EEFF'  // Light blue tinted white
+    ];
+    
+    // Pre-calculated pattern lookup for better performance
+    // This creates a 16x16 pattern that repeats
+    if (!window.snowPattern) {
+        // Create a reusable pattern (only computed once)
+        window.snowPattern = [];
+        for (let px = 0; px < 16; px++) {
+            window.snowPattern[px] = [];
+            for (let py = 0; py < 16; py++) {
+                // Generate values for each position in the repeating pattern
+                const patternSeed = Math.sin(px * 0.7) * 10000 + Math.cos(py * 0.7) * 10000;
+                const val = Math.abs(patternSeed) % 100;
+                
+                // Determine color index based on the value
+                let colorIndex;
+                if (val < 60) colorIndex = 0; // Main color (60%)
+                else if (val < 85) colorIndex = 1; // Second color (25%)
+                else if (val < 95) colorIndex = 2; // Third color (10%)
+                else colorIndex = 3; // Fourth color (5%)
+                
+                window.snowPattern[px][py] = colorIndex;
+            }
+        }
+    }
+    
+    // Draw the pixelated snow efficiently
+    for (let x = startX; x < endX; x += pixelSize) {
+        for (let y = startY; y < endY; y += pixelSize) {
+            // Use a repeating pattern based on world position
+            const patternX = Math.abs(Math.floor(x / pixelSize) % 16);
+            const patternY = Math.abs(Math.floor(y / pixelSize) % 16);
+            
+            // Look up the color index from our pre-computed pattern
+            const colorIndex = window.snowPattern[patternX][patternY];
+            
+            // Draw the snow pixel
+            ctx.fillStyle = snowColors[colorIndex];
+            ctx.fillRect(
+                x - cameraX, 
+                y - cameraY, 
+                pixelSize, 
+                pixelSize
+            );
+            
+            // Add sparkle effects to make snow glisten (only to about 1% of pixels)
+            if ((patternX + patternY) % 16 === 0) {
+                // Simple highlight detail that's very cheap to draw
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(
+                    x - cameraX + pixelSize/4, 
+                    y - cameraY + pixelSize/4, 
+                    pixelSize/2, 
+                    pixelSize/2
+                );
+            }
+        }
+    }
+    
+    // Add occasional snow drifts/bumps for texture
+    drawSnowDrifts(startX, startY, endX, endY, pixelSize);
+}
 
+// Function to add occasional snow drifts for more texture
+function drawSnowDrifts(startX, startY, endX, endY, pixelSize) {
+    // Create some random snow drifts
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    
+    // Use a deterministic approach for drift placement based on world position
+    for (let x = startX; x < endX; x += pixelSize * 10) {
+        for (let y = startY; y < endY; y += pixelSize * 10) {
+            // Use position to seed a consistent drift pattern
+            const seed = Math.sin(x * 0.01) * Math.cos(y * 0.01) * 10000;
+            
+            // Only draw drift in some locations
+            if (Math.abs(seed) % 100 < 30) {
+                // Determine drift size
+                const driftWidth = (Math.abs(seed) % 5 + 3) * pixelSize;
+                const driftHeight = (Math.abs(seed) % 3 + 1) * pixelSize;
+                
+                // Draw an oval snow drift
+                ctx.beginPath();
+                ctx.ellipse(
+                    x - cameraX + pixelSize * 5, 
+                    y - cameraY + pixelSize * 5, 
+                    driftWidth / 2, 
+                    driftHeight / 2, 
+                    0, 0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+        }
+    }
+}
 // Add this new function to create the pixelated grass effect
 function drawPixelatedGrass() {
     // Use larger pixels for better performance
@@ -1542,6 +1652,148 @@ function createHitEffect(x, y) {
     // hitSound.play().catch(e => console.log('Audio play failed:', e));
 }
 
+// Function to update the water animation to look like ice
+function drawIceAnimation(drawX, drawY, pond) {
+    const time = Date.now() * 0.001;
+    
+    // Draw ice cracks pattern
+    ctx.strokeStyle = 'rgba(200, 230, 255, 0.6)';
+    ctx.lineWidth = 1.5;
+    
+    // Create ice crack patterns
+    for (let i = 0; i < 5; i++) {
+        const yOffset = (i * pond.height/5) + Math.sin(time * 0.5 + i) * 3;
+        
+        if (yOffset > 0 && yOffset < pond.height) {
+            ctx.beginPath();
+            ctx.moveTo(drawX + pond.width * 0.2, drawY + yOffset);
+            
+            // Create jagged line for ice cracks
+            for (let x = 0; x <= 6; x++) {
+                const waveX = drawX + pond.width * (0.2 + x * 0.1);
+                const waveY = drawY + yOffset + Math.sin(time * 1.5 + x * 2 + i) * 3;
+                ctx.lineTo(waveX, waveY);
+            }
+            
+            ctx.stroke();
+        }
+    }
+    
+    // Add ice shine highlights
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(
+        drawX + pond.width * 0.7,
+        drawY + pond.height * 0.3,
+        pond.width * 0.15,
+        pond.height * 0.1,
+        Math.PI / 4,
+        0, Math.PI * 2
+    );
+    ctx.fill();
+}
+
+// Update drawPonds function to make ponds look like frozen ponds
+function drawIce() {
+    gameObjects.ponds.forEach(pond => {
+        const drawX = pond.x - cameraX;
+        const drawY = pond.y - cameraY;
+        
+        // Only draw if visible on screen (with buffer)
+        if (
+            drawX + pond.width >= -100 &&
+            drawX <= canvas.width + 100 &&
+            drawY + pond.height >= -100 &&
+            drawY <= canvas.height + 100
+        ) {
+            // Try to draw sprite, fallback to colored shape
+            try {
+                ctx.drawImage(pondSprite, drawX, drawY, pond.width, pond.height);
+            } catch (e) {
+                // Fallback to icy blue oval
+                ctx.fillStyle = '#A5D8FF'; // Light blue for ice
+                ctx.beginPath();
+                ctx.ellipse(
+                    drawX + pond.width/2, 
+                    drawY + pond.height/2, 
+                    pond.width/2, 
+                    pond.height/2, 
+                    0, 0, Math.PI * 2
+                );
+                ctx.fill();
+                
+                // Add some detail to the frozen pond
+                ctx.fillStyle = '#D6EAFF'; // Even lighter blue
+                ctx.beginPath();
+                ctx.ellipse(
+                    drawX + pond.width/2, 
+                    drawY + pond.height/2, 
+                    pond.width/3, 
+                    pond.height/3, 
+                    0, 0, Math.PI * 2
+                );
+                ctx.fill();
+                
+                // Add ripple effects replaced with ice cracks
+                drawIceRipples(drawX, drawY, pond);
+            }
+            
+            // Animate ice by drawing semi-transparent cracks
+            drawIceAnimation(drawX, drawY, pond);
+        }
+    });
+}
+
+// Update drawPondRipples to look like ice cracks
+function drawIceRipples(drawX, drawY, pond) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 1;
+    
+    // Draw 3 elliptical cracks
+    for (let i = 0; i < 3; i++) {
+        const seed = i * 1000 + pond.x + pond.y;
+        const cracksScale = 0.7 + (i * 0.1);
+        
+        ctx.beginPath();
+        ctx.ellipse(
+            drawX + pond.width/2, 
+            drawY + pond.height/2, 
+            pond.width/2 * cracksScale, 
+            pond.height/2 * cracksScale, 
+            0, 0, Math.PI * 2
+        );
+        ctx.stroke();
+        
+        // Add some jagged lines for cracks
+        const numCracks = 3 + i;
+        for (let j = 0; j < numCracks; j++) {
+            const angle = (seed + j * 1000) % 628 / 100; // 0 to 2π
+            const startX = drawX + pond.width/2;
+            const startY = drawY + pond.height/2;
+            const length = (pond.width/2) * (0.3 + (j % 3) * 0.2);
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            
+            // Create jagged line
+            let currentX = startX;
+            let currentY = startY;
+            const segments = 3 + (j % 3);
+            
+            for (let k = 0; k < segments; k++) {
+                const segmentAngle = angle + (Math.sin(k * 1.5) * 0.2);
+                const segmentLength = length / segments;
+                
+                currentX += Math.cos(segmentAngle) * segmentLength;
+                currentY += Math.sin(segmentAngle) * segmentLength;
+                
+                ctx.lineTo(currentX, currentY);
+            }
+            
+            ctx.stroke();
+        }
+    }
+}
 
 function drawPonds() {
     gameObjects.ponds.forEach(pond => {
@@ -1939,14 +2191,15 @@ function playCoinSound() {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             // Draw clouds (optional)
-            drawPixelatedGrass();
-          
+            //drawPixelatedGrass();
+            drawPixelatedSnow();
            
             // Draw rocks
            
             
             //draw ponds
             drawPonds();
+            //drawIce();
             // Draw trees
             drawGameObjects(gameObjects.trees, treeSprite, 'green');
             
@@ -1964,7 +2217,7 @@ function playCoinSound() {
     drawCoins();
     drawBullets();
     drawClouds();
-    
+    drawFallingSnow();
     // Draw fish inventory if open
     if (isInventoryOpen) {
         drawFishInventory();
@@ -2039,8 +2292,17 @@ function playCoinSound() {
     }
 }
 function drawClouds() {
-    // Cloud settings
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    // Winter cloud settings - using blue-gray tones
+    // Choose one of these color options:
+    
+    // Option 1: Light Gray Clouds
+    // ctx.fillStyle = 'rgba(220, 220, 220, 0.8)';
+    
+    // Option 2: Soft Blue-Gray Clouds (recommended for winter theme)
+    ctx.fillStyle = 'rgba(210, 218, 230, 0.8)';
+    
+    // Option 3: White with blue tint
+    // ctx.fillStyle = 'rgba(240, 248, 255, 0.8)';
     
     // Use time to animate clouds
     const time = Date.now() * 0.0002;
@@ -2112,9 +2374,133 @@ function drawClouds() {
                 
                 // Fill the entire shape
                 ctx.fill();
+                
+                // Optional: Add darker bottom to clouds to suggest snow
+                ctx.fillStyle = 'rgba(190, 200, 220, 0.4)';
+                ctx.beginPath();
+                ctx.arc(drawX, drawY + cloudSize * 0.1, cloudSize * 0.45, 0, Math.PI);
+                ctx.arc(drawX - cloudSize * 0.25, drawY + cloudSize * 0.15, cloudSize * 0.3, 0, Math.PI);
+                ctx.arc(drawX + cloudSize * 0.25, drawY + cloudSize * 0.12, cloudSize * 0.35, 0, Math.PI);
+                ctx.fill();
             }
         }
     }
+    
+    // Optional: Add occasional falling snowflakes
+   // drawFallingSnow();
+}
+
+// Add a new function to create falling snow effect
+// Simple diagonal snow effect for top-down view
+function drawFallingSnow() {
+    // Create snow array once
+    if (!window.snowflakes) {
+        window.snowflakes = [];
+        // Create snowflakes around the camera view
+        for (let i = 0; i < 300; i++) {
+            window.snowflakes.push(createSnowflakeAtCamera());
+        }
+    }
+    
+    // Draw and update each snowflake
+    ctx.fillStyle = '#FFFFFF';
+    
+    for (let i = 0; i < window.snowflakes.length; i++) {
+        const flake = window.snowflakes[i];
+        
+        // Calculate screen position (relative to camera)
+        const drawX = flake.x - cameraX;
+        const drawY = flake.y - cameraY;
+        
+        // Only draw if visible on screen (with small buffer)
+        if (
+            drawX >= -20 &&
+            drawX <= canvas.width + 20 &&
+            drawY >= -20 &&
+            drawY <= canvas.height + 20
+        ) {
+            // Set opacity for this snowflake
+            ctx.globalAlpha = flake.opacity;
+            
+            // Draw snowflake as a simple circle
+            ctx.beginPath();
+            ctx.arc(drawX, drawY, flake.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Update snowflake position - diagonal movement
+        flake.x += flake.speedX;
+        flake.y += flake.speedY;
+        
+        // Check if the snowflake is far outside the camera view
+        // Use a larger boundary than drawing boundary
+        const farOffScreen = 
+            drawX < -100 || 
+            drawX > canvas.width + 100 || 
+            drawY < -100 || 
+            drawY > canvas.height + 100;
+            
+        // If far off screen, recycle the snowflake to a new position near the camera
+        if (farOffScreen) {
+            // Determine which edge to place the new snowflake based on the movement direction
+            // Since we're moving diagonally down-left, place new flakes at top or right edges
+            const edgeChoice = Math.random() > 0.5 ? 'top' : 'right';
+            
+            if (edgeChoice === 'top') {
+                // Place at random position along top edge of camera view
+                flake.x = cameraX + Math.random() * canvas.width;
+                flake.y = cameraY - 10 - Math.random() * 20; // Slightly above camera view
+            } else {
+                // Place at random position along right edge of camera view
+                flake.x = cameraX + canvas.width + 10 + Math.random() * 20; // Slightly right of camera view
+                flake.y = cameraY + Math.random() * canvas.height;
+            }
+            
+            // Randomize the snowflake properties slightly to keep the effect fresh
+            flake.size = Math.random() * 2 + 1;
+            flake.speedX = -(Math.random() * 0.5 + 1); // Always moves left
+            flake.speedY = Math.random() * 0.5 + 1;    // Always moves down
+            flake.opacity = Math.random() * 0.3 + 0.7;
+        }
+    }
+    
+    // Reset global alpha
+    ctx.globalAlpha = 1.0;
+}
+
+// Helper function to create a snowflake near the camera
+function createSnowflakeAtCamera() {
+    // Determine start position - either above or to the right of camera view
+    const edgeChoice = Math.random() > 0.5 ? 'top' : 'right';
+    
+    let x, y;
+    
+    if (edgeChoice === 'top') {
+        // Place at random position along top edge of camera view
+        x = cameraX + Math.random() * canvas.width;
+        y = cameraY - 10 - Math.random() * 20; // Slightly above camera view
+    } else {
+        // Place at random position along right edge of camera view
+        x = cameraX + canvas.width + 10 + Math.random() * 20; // Slightly right of camera view
+        y = cameraY + Math.random() * canvas.height;
+    }
+    
+    // For initial creation, also randomly place some flakes within the camera view
+    if (Math.random() < 0.3) { // 30% chance
+        x = cameraX + Math.random() * canvas.width;
+        y = cameraY + Math.random() * canvas.height;
+    }
+    
+    return {
+        x: x,
+        y: y,
+        size: Math.random() * 2 + 1,
+        // Diagonal speed components
+        speedX: -(Math.random() * 0.5 + 1), // Always moves left (negative X)
+        speedY: Math.random() * 0.5 + 1,    // Always moves down (positive Y)
+        // Slight variance in opacity
+        opacity: Math.random() * 0.3 + 0.7
+    };
 }
         
       function drawGameObjects(objects, sprite, fallbackColor) {
@@ -2361,7 +2747,7 @@ function drawFishingProgress() {
     fishingProgress = (Date.now() % 1000) / 1000; // 0 to 1 value cycling every 1 seconds
     
     // 1. Draw progress bar background first
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = '#332727';
     ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
     
     // 2. Draw success zone (30% of the bar width, positioned randomly)
@@ -2372,12 +2758,12 @@ function drawFishingProgress() {
     const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
     const successZoneStart = progressBarX + successZonePosition;
     
-    ctx.fillStyle = '#4CAF50'; // Green color for success zone
+    ctx.fillStyle = '#8bf0a8'; // Green color for success zone
     ctx.fillRect(successZoneStart, progressBarY, successZoneWidth, progressBarHeight);
     
     // 3. Draw progress indicator LAST so it's always on top
     const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#c23636';
     ctx.fillRect(indicatorPos - 2, progressBarY, 4, progressBarHeight);
     
     // Check if the indicator is in the success zone
