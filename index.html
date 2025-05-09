@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Chat Game</title>
+    <title>Chat and Chill</title>
     <style>
         body {
             margin: 0;
@@ -190,7 +190,7 @@
 </head>
 <body>
     <div id="loginContainer">
-        <h2>Welcome to Chat Lobby!</h2>
+        <h2>Welcome to Chat and Chill!</h2>
         <div class="input-group">
             <label for="loginUsername">Username:</label>
             <input type="text" id="loginUsername" placeholder="Username">
@@ -226,15 +226,15 @@
     <div id="gameContainer">
 
 <div id="instructionsCard" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000; width: 400px; max-width: 90vw; box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); font-family: Arial, sans-serif;">
-    <h2 style="text-align: center; color: #FFD700; margin-top: 0;">Welcome to Chat Lobby!</h2>
+    <h2 style="text-align: center; color: #FFD700; margin-top: 0;">Welcome to Chat and Chill!</h2>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #4CAF50; margin-bottom: 5px;">Movement</h3>
         <p>Use <b>WASD</b> or <b>Arrow Keys</b> to move your character</p>
     </div>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #2196F3; margin-bottom: 5px;">Combat</h3>
-        <p>Press <b>Spacebar</b> to shoot</p>
-        <p>Collect blue ammo packs to reload</p>
+        <p>Press <b>Spacebar</b> to shoot snowballs</p>
+        <p>Collect snowballs to reload</p>
     </div>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #FFC107; margin-bottom: 5px;">Fishing</h3>
@@ -384,7 +384,7 @@ for (let i = 1; i <= 10; i++) {
         coinSprite.src = '/coin.png'; // Create this image or use a placeholder
         
         const ammoPackSprite = new Image();
-        ammoPackSprite.src = '/ammo-rifle.png'; // Create this image or use a placeholder
+        ammoPackSprite.src = '/Snowball2.png'; // Create this image or use a placeholder
         // Camera tracking
         let cameraX = 0;
         let cameraY = 0;
@@ -1182,12 +1182,12 @@ function playShootSound() {
 function updateAmmoDisplay() {
     const ammoDisplay = document.getElementById('ammoDisplay');
     if (ammoDisplay) {
-        ammoDisplay.textContent = `Ammo: ${currentAmmo}/${MAX_AMMO}`;
+        ammoDisplay.textContent = `Snowball: ${currentAmmo}/${MAX_AMMO}`;
         
         // Change color based on ammo level
-        if (currentAmmo <= 5) {
+        if (currentAmmo <= 2) {
             ammoDisplay.style.color = '#FF0000'; // Red for low ammo
-        } else if (currentAmmo <= 15) {
+        } else if (currentAmmo <= 4) {
             ammoDisplay.style.color = '#FFA500'; // Orange for medium ammo
         } else {
             ammoDisplay.style.color = '#000000'; // Black for normal
@@ -2598,44 +2598,49 @@ function createSnowflakeAtCamera() {
         }
         
         function drawPlayers() {
-            for (const id in players) {
-                const player = players[id];
-                const drawX = player.x - cameraX;
-                const drawY = player.y - cameraY;
-                
-                // Only draw if visible on screen
-                if (
-                    drawX + PLAYER_SIZE >= 0 &&
-                    drawX <= canvas.width &&
-                    drawY + PLAYER_SIZE >= 0 &&
-                    drawY <= canvas.height
-                ) {
-                    // First draw colored square (for customized color)
-                    ctx.fillStyle = player.color || '#FF0000';
-                    ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
-                    
-                    // Then draw player sprite with transparency
-                    try {
-                        ctx.globalAlpha = 0.7; // Make sprite semi-transparent
-                        ctx.drawImage(playerSprite, drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
-                        ctx.globalAlpha = 1.0; // Reset alpha
-                    } catch (e) {
-                        // If sprite fails, we already have the colored square
-                    }
-                    
-                    // Draw player name
-                    ctx.fillStyle = 'white';
-                    ctx.font = '14px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(player.username, drawX + PLAYER_SIZE / 2, drawY - 5);
-                    
-                    // Draw player score
-                    if (player.score !== undefined) {
-                        ctx.fillText(`${player.score} pts`, drawX + PLAYER_SIZE / 2, drawY - 25);
-                    }
-                }
+    for (const id in players) {
+        const player = players[id];
+        const drawX = player.x - cameraX;
+        const drawY = player.y - cameraY;
+        
+        // Only draw if visible on screen
+        if (
+            drawX + PLAYER_SIZE >= 0 &&
+            drawX <= canvas.width &&
+            drawY + PLAYER_SIZE >= 0 &&
+            drawY <= canvas.height
+        ) {
+            // First draw colored square (for customized color)
+            ctx.fillStyle = player.color || '#FF0000';
+            ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+            
+            // Then draw player sprite with transparency
+            try {
+                ctx.globalAlpha = 0.7; // Make sprite semi-transparent
+                ctx.drawImage(playerSprite, drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+                ctx.globalAlpha = 1.0; // Reset alpha
+            } catch (e) {
+                // If sprite fails, we already have the colored square
+            }
+            
+            // Draw player name with improved visibility
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            
+            // Use a dark color that stands out against snow (no shadow)
+            ctx.fillStyle = '#000000'; // Black text
+            ctx.fillText(player.username, drawX + PLAYER_SIZE / 2, drawY - 5);
+            
+            // Draw player score
+            if (player.score !== undefined) {
+                ctx.fillStyle = '#000000'; // Same black color
+                ctx.fillText(`${player.score} pts`, drawX + PLAYER_SIZE / 2, drawY - 25);
             }
         }
+    }
+}
+
+
         function isPlayerInWater() {
     if (!myId || !players[myId]) return false;
     
