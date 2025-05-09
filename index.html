@@ -106,7 +106,7 @@
 }
 .ammoDisplay {
     position: absolute;
-    top: 40px;
+    top: 50px;
     left: 10px;
     background-color: rgba(255, 255, 255, 0.8);
     padding: 10px;
@@ -178,7 +178,7 @@
         }
         .baitDisplay {
     position: absolute;
-    top: 70px;
+    top: 90px;
     left: 10px;
     background-color: rgba(255, 255, 255, 0.8);
     padding: 10px;
@@ -295,14 +295,28 @@
         let username = "";
         let userColor = "#FF0000";
         let players = {};
-
+        const soundEffectCooldowns = {
+    'coin-sound.mp3': 0,
+    'ammo-sound.mp3': 0,
+    'bait.mp3': 0,
+    'gun.mp3': 0,
+    'catch.mp3': 0,
+    'missedFish.mp3': 0,
+    'splash.mp3': 0,
+    'trashcan.mp3': 0
+};
+const backgroundMusic = new Audio('/background-music.mp3'); // Replace with your music file path
+backgroundMusic.loop = true; // Make music loop continuously
+backgroundMusic.volume = 0.3; // Set to 30% volume to start
+let isMusicMuted = false;
+        const SOUND_COOLDOWN = 300; // Adjust this value as needed
         let fishInventory = []; // Array to store caught fish
-let isInventoryOpen = false;
-let isFishing = false;
-let fishingProgress = 0;
-let fishingSuccess = false;
-let fishingResult = null;
-let fishingTimeout = null;
+        let isInventoryOpen = false;
+        let isFishing = false;
+        let fishingProgress = 0;
+        let fishingSuccess = false;
+        let fishingResult = null;
+        let fishingTimeout = null;
         let myId = null;
         let playerScore = 0;
         let gameObjects = {
@@ -314,9 +328,9 @@ let fishingTimeout = null;
             ponds: []
         };
         let currentBait = 5; // Start with 5 bait
-const MAX_BAIT = 10; // Maximum bait capacity
-const BAIT_PACK_SIZE = 1; // Amount of bait in each pack
-const BAIT_PACK_SIZE_DISPLAY = 60; // Visual size of bait packs
+        const MAX_BAIT = 10; // Maximum bait capacity
+        const BAIT_PACK_SIZE = 1; // Amount of bait in each pack
+        const BAIT_PACK_SIZE_DISPLAY = 60; // Visual size of bait packs
         let currentAmmo = 5; // Start with 30 bullets
         const MAX_AMMO = 10; // Maximum ammo capacity
         const AMMO_PACK_SIZE = 5; // Amount of ammo in each pack
@@ -742,7 +756,6 @@ socket.on('fish_deleted', (data) => {
             }
         }
     }
-    
     function enhanceInitGame() {
     // Store the original initGame function
     const originalInitGame = initGame;
@@ -755,6 +768,8 @@ socket.on('fish_deleted', (data) => {
         // Add our enhancements
         checkShowInstructions();
         addInstructionsButton();
+        
+       
     };
 }
 
@@ -1162,9 +1177,7 @@ function shootBullet() {
 
 // 4. Add sound effect function
 function playShootSound() {
-    const shootSound = new Audio('/gun.mp3'); // Create this sound or use a placeholder
-    shootSound.volume = 0.2;
-    shootSound.play().catch(e => console.log('Audio play failed:', e));
+    playSound('gun.mp3', 0.2);
 }
 function updateAmmoDisplay() {
     const ammoDisplay = document.getElementById('ammoDisplay');
@@ -1409,9 +1422,7 @@ function checkBaitPackCollection(player) {
 
 // 10. Add bait collection sound
 function playBaitSound() {
-    const baitSound = new Audio('/bait.mp3'); // Create this sound or use a placeholder
-    baitSound.volume = 0.4;
-    baitSound.play().catch(e => console.log('Audio play failed:', e));
+    playSound('bait.mp3', 0.3);
 }
 
 // Add this new function to create the pixelated grass effect
@@ -1823,9 +1834,7 @@ function playHitConfirmSound() {
     });
 }
 function playAmmoSound() {
-    const ammoSound = new Audio('/ammo-sound.mp3'); // Create this sound or use a placeholder
-    ammoSound.volume = 0.4;
-    ammoSound.play().catch(e => console.log('Audio play failed:', e));
+    playSound('ammo-sound.mp3', 0.4);
 }
         function checkCollision(player, newX, newY) {
     // Define player hitbox with some padding for better gameplay
@@ -1880,11 +1889,9 @@ function playAmmoSound() {
     
     return false; // No collision
 }
-        function playCoinSound() {
-            const coinSound = new Audio('/coin-sound.mp3'); // Create this sound or use a placeholder
-            coinSound.volume = 0.3;
-            coinSound.play().catch(e => console.log('Audio play failed:', e));
-        }
+function playCoinSound() {
+    playSound('coin-sound.mp3', 0.3);
+}
         
         function sendMessage() {
             const chatInput = document.getElementById('chatInput');
@@ -3089,14 +3096,129 @@ function addInstructionsButton() {
 }
 // Play sounds with error handling
 function playSound(soundFile, volume = 0.5) {
+    const currentTime = Date.now();
+    
+    // Check if the sound is on cooldown
+    if (currentTime - soundEffectCooldowns[soundFile] < SOUND_COOLDOWN) {
+        // Skip playing if the sound is on cooldown
+        return;
+    }
+    
+    // Update the last played time for this sound
+    soundEffectCooldowns[soundFile] = currentTime;
+    
     try {
         const sound = new Audio(`/${soundFile}`);
         sound.volume = volume;
-        sound.play().catch(e => console.log(`Sound play failed: ${e}`));
+        
+        // Add error handling for audio play
+        const playPromise = sound.play();
+        
+        if (playPromise !== undefined) {
+            playPromise.catch(e => {
+                console.log(`Sound play failed: ${e}`);
+            });
+        }
     } catch (e) {
         console.log(`Error playing sound: ${e}`);
     }
 }
+// Function to initialize music
+function setupGameMusic() {
+    console.log("Setting up game music...");
+    
+    // Create brand new audio element
+    const bgMusic = new Audio();
+    bgMusic.src = '/background-music.mp3'; // Path to your music file
+    bgMusic.loop = true;
+    bgMusic.volume = 0.3;
+    
+    // Create UI control
+    const musicControl = document.createElement('div');
+    musicControl.style.position = 'absolute';
+    musicControl.style.top = '120px';
+    musicControl.style.left = '0px';
+    musicControl.style.zIndex = '1000';
+    
+    const musicButton = document.createElement('button');
+    musicButton.textContent = '🎵 Music: ON';
+    musicButton.style.padding = '5px 10px';
+    musicButton.style.backgroundColor = '#4CAF50';
+    musicButton.style.border = 'none';
+    musicButton.style.borderRadius = '3px';
+    musicButton.style.cursor = 'pointer';
+    
+    let isMusicPlaying = false;
+    
+    // Toggle music state
+    musicButton.addEventListener('click', function() {
+        console.log("Music button clicked, current state:", isMusicPlaying);
+        isMusicPlaying = !isMusicPlaying;
+        
+        if (isMusicPlaying) {
+            // Try to play music
+            const playPromise = bgMusic.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log("Music started successfully");
+                    musicButton.textContent = '🎵 Music: ON';
+                    musicButton.style.backgroundColor = '#4CAF50';
+                }).catch(e => {
+                    console.error("Music play failed:", e);
+                    isMusicPlaying = false;
+                    musicButton.textContent = '🎵 Music: OFF';
+                    musicButton.style.backgroundColor = '#777';
+                });
+            }
+        } else {
+            // Pause music
+            bgMusic.pause();
+            musicButton.textContent = '🎵 Music: OFF';
+            musicButton.style.backgroundColor = '#777';
+        }
+    });
+    
+    // Add to DOM
+    musicControl.appendChild(musicButton);
+    document.getElementById('gameContainer').appendChild(musicControl);
+    
+    // Try initial auto-play (will likely be blocked, but try anyway)
+    bgMusic.play().then(() => {
+        isMusicPlaying = true;
+        console.log("Auto-play successful");
+    }).catch(e => {
+        console.log("Auto-play prevented (normal browser behavior):", e);
+        isMusicPlaying = false;
+        musicButton.textContent = '🎵 Music: OFF';
+        musicButton.style.backgroundColor = '#777';
+    });
+    
+    console.log("Music setup complete");
+}
+
+// Set a timer to add music after game fully loads
+// This ensures the gameContainer exists
+setTimeout(() => {
+    if (document.getElementById('gameContainer')) {
+        setupGameMusic();
+    } else {
+        // If game container doesn't exist yet, try on login success
+        socket.on('join_success', () => {
+            setTimeout(setupGameMusic, 1000);
+        });
+    }
+}, 1000);
+
+// Enable browser audio context on first user interaction (required by browsers)
+document.addEventListener('click', function enableAudio() {
+    // Create and destroy an audio context to enable audio
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext.resume().then(() => {
+        console.log("AudioContext enabled by user interaction");
+    });
+    // Remove this listener after first click
+    document.removeEventListener('click', enableAudio);
+}, { once: true });
     </script>
      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 12px; opacity: 0.5;">
         <a href="/admin" >Admin</a>

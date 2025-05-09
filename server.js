@@ -1487,11 +1487,11 @@ socket.on('collect_ammo', (ammoPackId) => {
 });
 
 // Update player ammo
-// socket.on('update_ammo', (data) => {
-//     if (players[socket.id]) {
-//         players[socket.id].ammo = data.ammo;
-//     }
-// });
+socket.on('update_ammo', (data) => {
+    if (players[socket.id]) {
+        players[socket.id].ammo = data.ammo;
+    }
+});
 
 
     // Add a new handler for coin collection
