@@ -841,7 +841,7 @@ enhanceInitGame();
     fishInventory.push(fishData);
     
     // Show notification
-    addChatMessage('System', `You caught a ${fishData.rarity} ${fishData.name} (${fishData.size} cm)!`);
+   // addChatMessage('System', `You caught a ${fishData.rarity} ${fishData.name} (${fishData.size} cm)!`);
     
     // Sort inventory by rarity and size
     fishInventory.sort((a, b) => {
@@ -2858,7 +2858,7 @@ function startFishing() {
     updateBaitDisplay();
     
     // Show fishing message
-    addChatMessage('System', 'Fishing started! Click when the indicator is in the green zone to catch a fish!');
+    //addChatMessage('System', 'Fishing started! Click when the indicator is in the green zone to catch a fish!');
     
     // Simulate rod casting animation
     playSound('splash.mp3', 0.3);
