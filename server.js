@@ -210,6 +210,8 @@ const fishTypes = [
         chance: 0.003 // 0.3% chance
     }
 ];
+const WORLD_WIDTH = 4000;  // Make sure this matches your client-side value
+const WORLD_HEIGHT = 3000; // Make sure this matches your client-side value
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
@@ -226,36 +228,61 @@ function generateGameObjects(mapWidth, mapHeight) {
     gameObjects.decorativeLakes = []; // Clear decorative lakes too
     
     
-    // Generate trees (20-30)
-    const treeCount = Math.floor(Math.random() * 11) + 20;
-    for (let i = 0; i < treeCount; i++) {
-        gameObjects.trees.push({
-            id: `tree-${i}`,
-            x: Math.random() * (mapWidth - 80),  // Adjust for tree size
-            y: Math.random() * (mapHeight - 100),
-            size: Math.floor(Math.random() * 30) + 70  // Random size between 70-100
-        });
-    }
     
-    // Generate rocks (15-25)
-    const rockCount = Math.floor(Math.random() * 11) + 15;
-    for (let i = 0; i < rockCount; i++) {
-        gameObjects.rocks.push({
-            id: `rock-${i}`,
-            x: Math.random() * (mapWidth - 60),  // Adjust for rock size
-            y: Math.random() * (mapHeight - 60),
-            size: Math.floor(Math.random() * 20) + 40  // Random size between 40-60
-        });
+    // Generate fishable ponds first (larger lakes)
+    const pondCount = Math.floor(Math.random() * 2) + 4;
+    for (let i = 0; i < pondCount; i++) {
+        // Make ponds significantly larger
+        const pondWidth = Math.floor(Math.random() * 250) + 350; // 350-600
+        const pondHeight = Math.floor(Math.random() * 200) + 250; // 250-450
+        
+        // Find a location that doesn't overlap with other water bodies
+        let validLocation = false;
+        let pondX, pondY;
+        let attempts = 0;
+        
+        while (!validLocation && attempts < 100) {
+            attempts++;
+            pondX = Math.random() * (mapWidth - pondWidth);
+            pondY = Math.random() * (mapHeight - pondHeight);
+            
+            // Check overlap with other ponds - maintain larger minimum distance
+            let overlap = false;
+            for (const pond of gameObjects.ponds) {
+                const distance = Math.sqrt(
+                    Math.pow(pondX + pondWidth/2 - (pond.x + pond.width/2), 2) +
+                    Math.pow(pondY + pondHeight/2 - (pond.y + pond.height/2), 2)
+                );
+                // Increased minimum distance between lakes to 500px
+                if (distance < 600) {
+                    overlap = true;
+                    break;
+                }
+            }
+            
+            validLocation = !overlap;
+        }
+        
+        // Add the pond if we found a valid location
+        if (validLocation) {
+            gameObjects.ponds.push({
+                id: `pond-${i}`,
+                x: pondX,
+                y: pondY,
+                width: pondWidth,
+                height: pondHeight
+            });
+        }
     }
 
-     // Generate decorative frozen lakes FIRST (3-5)
-    const decorativeLakeCount = Math.floor(Math.random() * 3) + 3;
+    // Generate decorative frozen lakes after ponds
+    const decorativeLakeCount = Math.floor(Math.random() * 2) + 3;
     for (let i = 0; i < decorativeLakeCount; i++) {
-        // Make decorative lakes larger than ponds
-        const lakeWidth = Math.floor(Math.random() * 250) + 300; // 300-550
-        const lakeHeight = Math.floor(Math.random() * 150) + 200; // 200-350
+        // Make larger frozen lakes
+        const lakeWidth = Math.floor(Math.random() * 300) + 300; // 300-600
+        const lakeHeight = Math.floor(Math.random() * 200) + 200; // 200-400
         
-        // Find a location that doesn't overlap with other objects
+        // Find a location that doesn't overlap with other water bodies
         let validLocation = false;
         let lakeX, lakeY;
         let attempts = 0;
@@ -265,34 +292,19 @@ function generateGameObjects(mapWidth, mapHeight) {
             lakeX = Math.random() * (mapWidth - lakeWidth);
             lakeY = Math.random() * (mapHeight - lakeHeight);
             
-            // Check for overlap with all existing objects
+            // Check for overlap with all existing water bodies
             let overlap = false;
             
-            // Check overlap with trees
-            for (const tree of gameObjects.trees) {
-                if (
-                    lakeX < tree.x + tree.size &&
-                    lakeX + lakeWidth > tree.x &&
-                    lakeY < tree.y + tree.size &&
-                    lakeY + lakeHeight > tree.y
-                ) {
+            // Check overlap with fishable ponds - keep good distance
+            for (const pond of gameObjects.ponds) {
+                const distance = Math.sqrt(
+                    Math.pow(lakeX + lakeWidth/2 - (pond.x + pond.width/2), 2) +
+                    Math.pow(lakeY + lakeHeight/2 - (pond.y + pond.height/2), 2)
+                );
+                // Increased minimum distance between lakes and ponds
+                if (distance < 500) {
                     overlap = true;
                     break;
-                }
-            }
-            
-            // Check overlap with rocks
-            if (!overlap) {
-                for (const rock of gameObjects.rocks) {
-                    if (
-                        lakeX < rock.x + rock.size &&
-                        lakeX + lakeWidth > rock.x &&
-                        lakeY < rock.y + rock.size &&
-                        lakeY + lakeHeight > rock.y
-                    ) {
-                        overlap = true;
-                        break;
-                    }
                 }
             }
             
@@ -303,7 +315,8 @@ function generateGameObjects(mapWidth, mapHeight) {
                         Math.pow(lakeX + lakeWidth/2 - (lake.x + lake.width/2), 2) +
                         Math.pow(lakeY + lakeHeight/2 - (lake.y + lake.height/2), 2)
                     );
-                    if (distance < 400) { // Minimum distance between decorative lakes
+                    // Increased minimum distance between decorative lakes
+                    if (distance < 500) {
                         overlap = true;
                         break;
                     }
@@ -313,7 +326,7 @@ function generateGameObjects(mapWidth, mapHeight) {
             validLocation = !overlap;
         }
         
-        // Add the decorative lake
+        // Add the decorative lake if we found a valid location
         if (validLocation) {
             gameObjects.decorativeLakes.push({
                 id: `decorative-lake-${i}`,
@@ -325,78 +338,53 @@ function generateGameObjects(mapWidth, mapHeight) {
             });
         }
     }
-
-    // NOW generate fishable ponds (5-8) that avoid decorative lakes
-    const pondCount = Math.floor(Math.random() * 4) + 5; // 5-8 ponds
-    for (let i = 0; i < pondCount; i++) {
-        // Make ponds smaller so they fit better on the map
-        const pondWidth = Math.floor(Math.random() * 100) + 150; // 150-250
-        const pondHeight = Math.floor(Math.random() * 80) + 120; // 120-200
+    
+    // STEP 2: GENERATE TREES AND ROCKS
+    // ================================
+    
+    // Generate trees - scale up count for larger world
+    const treeCount = Math.floor(Math.random() * 21) + 40; // 40-60 trees
+    for (let i = 0; i < treeCount; i++) {
+        const treeSize = Math.floor(Math.random() * 30) + 70;
         
-        // Find a location that doesn't overlap with other objects
+        // Find a valid location that doesn't overlap with water bodies
         let validLocation = false;
-        let pondX, pondY;
+        let treeX, treeY;
         let attempts = 0;
         
-        while (!validLocation && attempts < 100) { // Increased attempts for more ponds
+        while (!validLocation && attempts < 50) {
             attempts++;
-            pondX = Math.random() * (mapWidth - pondWidth);
-            pondY = Math.random() * (mapHeight - pondHeight);
+            treeX = Math.random() * (mapWidth - treeSize);
+            treeY = Math.random() * (mapHeight - treeSize);
             
-            // Check for overlap with all objects
+            // Check for overlap with all water bodies
             let overlap = false;
             
-            // Check trees
-            for (const tree of gameObjects.trees) {
+            // Check overlap with fishable ponds
+            for (const pond of gameObjects.ponds) {
+                // Keep trees away from edges of ponds (for fishing access)
+                const buffer = 10; // Small buffer to allow some trees near water
                 if (
-                    pondX < tree.x + tree.size &&
-                    pondX + pondWidth > tree.x &&
-                    pondY < tree.y + tree.size &&
-                    pondY + pondHeight > tree.y
+                    treeX < pond.x + pond.width + buffer &&
+                    treeX + treeSize > pond.x - buffer &&
+                    treeY < pond.y + pond.height + buffer &&
+                    treeY + treeSize > pond.y - buffer
                 ) {
                     overlap = true;
                     break;
                 }
             }
             
-            // Check rocks
-            if (!overlap) {
-                for (const rock of gameObjects.rocks) {
-                    if (
-                        pondX < rock.x + rock.size &&
-                        pondX + pondWidth > rock.x &&
-                        pondY < rock.y + rock.size &&
-                        pondY + pondHeight > rock.y
-                    ) {
-                        overlap = true;
-                        break;
-                    }
-                }
-            }
-            
-            // Check decorative lakes - IMPORTANT: Avoid overlap with ice lakes!
+            // Check overlap with decorative lakes
             if (!overlap) {
                 for (const lake of gameObjects.decorativeLakes) {
+                    const buffer = 5; // Smaller buffer for decorative lakes
                     if (
-                        pondX < lake.x + lake.width &&
-                        pondX + pondWidth > lake.x &&
-                        pondY < lake.y + lake.height &&
-                        pondY + pondHeight > lake.y
+                        treeX < lake.x + lake.width + buffer &&
+                        treeX + treeSize > lake.x - buffer &&
+                        treeY < lake.y + lake.height + buffer &&
+                        treeY + treeSize > lake.y - buffer
                     ) {
-                        overlap = true;
-                        break;
-                    }
-                }
-            }
-            
-            // Check other ponds - maintain minimum distance between ponds
-            if (!overlap) {
-                for (const pond of gameObjects.ponds) {
-                    const distance = Math.sqrt(
-                        Math.pow(pondX + pondWidth/2 - (pond.x + pond.width/2), 2) +
-                        Math.pow(pondY + pondHeight/2 - (pond.y + pond.height/2), 2)
-                    );
-                    if (distance < 250) { // Minimum distance between ponds
                         overlap = true;
                         break;
                     }
@@ -406,20 +394,95 @@ function generateGameObjects(mapWidth, mapHeight) {
             validLocation = !overlap;
         }
         
-        // Add the pond
         if (validLocation) {
-            gameObjects.ponds.push({
-                id: `pond-${i}`,
-                x: pondX,
-                y: pondY,
-                width: pondWidth,
-                height: pondHeight
+            gameObjects.trees.push({
+                id: `tree-${i}`,
+                x: treeX,
+                y: treeY,
+                size: treeSize
+            });
+        }
+    }
+    
+    // Generate rocks - scale up count
+    const rockCount = Math.floor(Math.random() * 21) + 30; // 30-50 rocks
+    for (let i = 0; i < rockCount; i++) {
+        const rockSize = Math.floor(Math.random() * 20) + 40;
+        
+        // Find a valid location that doesn't overlap with water bodies or trees
+        let validLocation = false;
+        let rockX, rockY;
+        let attempts = 0;
+        
+        while (!validLocation && attempts < 50) {
+            attempts++;
+            rockX = Math.random() * (mapWidth - rockSize);
+            rockY = Math.random() * (mapHeight - rockSize);
+            
+            // Check for overlap
+            let overlap = false;
+            
+            // Check overlap with fishable ponds
+            for (const pond of gameObjects.ponds) {
+                // Keep rocks away from edges of ponds
+                const buffer = 5;
+                if (
+                    rockX < pond.x + pond.width + buffer &&
+                    rockX + rockSize > pond.x - buffer &&
+                    rockY < pond.y + pond.height + buffer &&
+                    rockY + rockSize > pond.y - buffer
+                ) {
+                    overlap = true;
+                    break;
+                }
+            }
+            
+            // Check overlap with decorative lakes
+            if (!overlap) {
+                for (const lake of gameObjects.decorativeLakes) {
+                    const buffer = 5;
+                    if (
+                        rockX < lake.x + lake.width + buffer &&
+                        rockX + rockSize > lake.x - buffer &&
+                        rockY < lake.y + lake.height + buffer &&
+                        rockY + rockSize > lake.y - buffer
+                    ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check overlap with trees (prevent excessive clustering)
+            if (!overlap) {
+                for (const tree of gameObjects.trees) {
+                    if (
+                        rockX < tree.x + tree.size &&
+                        rockX + rockSize > tree.x &&
+                        rockY < tree.y + tree.size &&
+                        rockY + rockSize > tree.y
+                    ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            validLocation = !overlap;
+        }
+        
+        if (validLocation) {
+            gameObjects.rocks.push({
+                id: `rock-${i}`,
+                x: rockX,
+                y: rockY,
+                size: rockSize
             });
         }
     }
     
     // Generate coins (10-15)
-    const coinCount = Math.floor(Math.random() * 6) + 10;
+    const coinCount = Math.floor(Math.random() * 10) + 20;
     for (let i = 0; i < coinCount; i++) {
         gameObjects.coins.push({
             id: `coin-${i}`,
@@ -428,7 +491,7 @@ function generateGameObjects(mapWidth, mapHeight) {
             collected: false
         });
     }
-    const ammoPackCount = Math.floor(Math.random() * 6) + 5;
+    const ammoPackCount = Math.floor(Math.random() * 10) + 10; // Increased from 5-10 to 10-19
     for (let i = 0; i < ammoPackCount; i++) {
         gameObjects.ammoPacks.push({
             id: `ammo-${i}`,
@@ -438,7 +501,7 @@ function generateGameObjects(mapWidth, mapHeight) {
         });
     }
      // Generate bait packs (3-7) - tend to place closer to water
-     const baitPackCount = Math.floor(Math.random() * 5) + 3;
+     const baitPackCount = Math.floor(Math.random() * 8) + 7; // Increased from 3-7 to 7-14
      for (let i = 0; i < baitPackCount; i++) {
          // Try to place some bait packs near ponds
          let baitX, baitY;
@@ -492,9 +555,9 @@ function updateServerBullets() {
         // Check if bullet is out of bounds
         if (
             bullet.x < 0 ||
-            bullet.x > 2000 || // WORLD_WIDTH
+            bullet.x > 4000 || // Updated from 2000
             bullet.y < 0 ||
-            bullet.y > 1500    // WORLD_HEIGHT
+            bullet.y > 3000    // Updated from 1500
         ) {
             bullets.splice(i, 1);
             continue;
@@ -1151,12 +1214,34 @@ io.on('connection', (socket) => {
                 delete players[existingSocketId];
             }
         }
-        
+        socket.on('request_unstuck', () => {
+    if (!players[socket.id]) return;
+    
+    // Find a safe spawn position
+    const safePosition = findSafeSpawnPosition(WORLD_WIDTH, WORLD_HEIGHT, 50);
+    
+    // Update player position
+    players[socket.id].x = safePosition.x;
+    players[socket.id].y = safePosition.y;
+    
+    // Send confirmation back to the client
+    socket.emit('unstuck_response', { 
+        success: true,
+        x: safePosition.x,
+        y: safePosition.y
+    });
+    
+    // Broadcast updated position to all players
+    io.emit('game_state', { players });
+    
+    // Optional: Log unstuck usage
+    console.log(`Player ${players[socket.id].username} used unstuck feature`);
+});
         // Store username
         usernames.add(username);
         
         // Create player with random position and saved color
-        const safePosition = findSafeSpawnPosition(2000, 1500, 50);
+        const safePosition = findSafeSpawnPosition(WORLD_WIDTH,  WORLD_HEIGHT, 50);
     
         players[socket.id] = {
             id: socket.id,
@@ -1170,7 +1255,7 @@ io.on('connection', (socket) => {
         };
          // Generate game objects if first player
         if (Object.keys(players).length === 1) {
-            generateGameObjects(2000, 1500);  // Use larger map size
+             generateGameObjects(4000, 3000);
         }
          // Get player score from database
     db.get('SELECT score FROM users WHERE username = ?', [username], (err, row) => {
@@ -1711,8 +1796,8 @@ socket.on('collect_coin', (coinId) => {
         // Keep player within world bounds
         if (position.x < 0) position.x = 0;
         if (position.y < 0) position.y = 0;
-        if (position.x > 2000 - 50) position.x = 2000 - 50; // WORLD_WIDTH - PLAYER_SIZE
-        if (position.y > 1500 - 50) position.y = 1500 - 50; // WORLD_HEIGHT - PLAYER_SIZE
+        if (position.x > 4000 - 50) position.x = 4000 - 50; // Updated from 2000
+        if (position.y > 3000 - 50) position.y = 3000 - 50; // Updated from 1500
         
         // Get the input sequence number from client
         const sequence = position.sequence;

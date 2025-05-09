@@ -335,7 +335,7 @@ let isMusicMuted = false;
         let currentAmmo = 5; // Start with 30 bullets
         const MAX_AMMO = 10; // Maximum ammo capacity
         const AMMO_PACK_SIZE = 5; // Amount of ammo in each pack
-        const AMMO_PACK_SIZE_DISPLAY = 50; // Visual size of ammo packs
+        const AMMO_PACK_SIZE_DISPLAY = 70; // Visual size of ammo packs
         let bullets = [];
         let mouseX = 0;
         let mouseY = 0;
@@ -358,7 +358,7 @@ const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
         // Game constants
         const PLAYER_SPEED = 7;
         const PLAYER_SIZE = 50;
-        const COIN_SIZE = 30;
+        const COIN_SIZE = 20;
         let deleteButtonPositions = [];
         // Game assets preloading
         const playerSprite = new Image();
@@ -389,8 +389,8 @@ for (let i = 1; i <= 10; i++) {
         // Camera tracking
         let cameraX = 0;
         let cameraY = 0;
-        const WORLD_WIDTH = 2000;
-        const WORLD_HEIGHT = 1500;
+        const WORLD_WIDTH = 4000;  // Increased from 2000
+        const WORLD_HEIGHT = 3000; // Increased from 1500
         
         // DOM elements
         const loginContainer = document.getElementById('loginContainer');
@@ -581,7 +581,56 @@ for (let i = 1; i <= 10; i++) {
             // Set canvas size to window size
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
-            
+             // Add unstuck button to the game UI
+    const unstuckButton = document.createElement('button');
+    unstuckButton.textContent = '🔄 Unstuck';
+    unstuckButton.style.position = 'absolute';
+    unstuckButton.style.bottom = '170px';
+    unstuckButton.style.right = '10px';
+    unstuckButton.style.backgroundColor = '#FF9800';
+    unstuckButton.style.color = 'white';
+    unstuckButton.style.border = 'none';
+    unstuckButton.style.borderRadius = '5px';
+    unstuckButton.style.padding = '8px 15px';
+    unstuckButton.style.cursor = 'pointer';
+    unstuckButton.style.zIndex = '1000';
+    unstuckButton.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    
+    // Add cooldown tracking
+    let lastUnstuckTime = 0;
+    const unstuckCooldown = 10000; // 10 seconds cooldown
+    
+    unstuckButton.addEventListener('click', function() {
+        const currentTime = Date.now();
+        
+        // Check for cooldown
+        if (currentTime - lastUnstuckTime < unstuckCooldown) {
+            const remainingCooldown = Math.ceil((unstuckCooldown - (currentTime - lastUnstuckTime)) / 1000);
+            addChatMessage('System', `Unstuck on cooldown. Please wait ${remainingCooldown} seconds.`);
+            return;
+        }
+        
+        // Request unstuck from server
+        socket.emit('request_unstuck');
+        lastUnstuckTime = currentTime;
+        
+        // Visual feedback that request was sent
+        unstuckButton.disabled = true;
+        unstuckButton.textContent = '⏳ Processing...';
+        unstuckButton.style.backgroundColor = '#999';
+        
+        // Reset button after cooldown
+        setTimeout(() => {
+            unstuckButton.disabled = false;
+            unstuckButton.textContent = '🔄 Unstuck';
+            unstuckButton.style.backgroundColor = '#FF9800';
+        }, unstuckCooldown);
+        
+        // Notify the player
+        addChatMessage('System', "Attempting to unstuck you... Please wait.");
+    });
+    
+    document.getElementById('gameContainer').appendChild(unstuckButton);
             // Set up chat functionality
             document.getElementById('sendButton').addEventListener('click', sendMessage);
             document.getElementById('chatInput').addEventListener('keypress', (e) => {
@@ -903,30 +952,37 @@ async function deleteAccount() {
                     3, 3
                 );
             });
-              minimapCtx.fillStyle = '#B8E3FF';
+//frozen lakes
+    minimapCtx.fillStyle = '#B8E3FF';
     gameObjects.decorativeLakes.forEach(lake => {
-        minimapCtx.fillRect(
-            (lake.x / WORLD_WIDTH) * minimapWidth - 1,
-            (lake.y / WORLD_HEIGHT) * minimapHeight - 1,
-            ((lake.width / WORLD_WIDTH) * minimapWidth) + 2,
-            ((lake.height / WORLD_HEIGHT) * minimapHeight) + 2
-        );
+        const centerX = (lake.x / WORLD_WIDTH) * minimapWidth + ((lake.width / WORLD_WIDTH) * minimapWidth) / 2;
+        const centerY = (lake.y / WORLD_HEIGHT) * minimapHeight + ((lake.height / WORLD_HEIGHT) * minimapHeight) / 2;
+        const radiusX = ((lake.width / WORLD_WIDTH) * minimapWidth) / 2;
+        const radiusY = ((lake.height / WORLD_HEIGHT) * minimapHeight) / 2;
+        
+        minimapCtx.beginPath();
+        minimapCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+        minimapCtx.fill();
     });
     
     // Draw fishable ponds as darker blue (so they're distinguishable)
-      minimapCtx.fillStyle = '#4FC3F7';
+     minimapCtx.fillStyle = '#4FC3F7';
     gameObjects.ponds.forEach(pond => {
-        const mapX = (pond.x / WORLD_WIDTH) * minimapWidth;
-        const mapY = (pond.y / WORLD_HEIGHT) * minimapHeight;
-        const mapWidth = Math.max(3, (pond.width / WORLD_WIDTH) * minimapWidth);
-        const mapHeight = Math.max(3, (pond.height / WORLD_HEIGHT) * minimapHeight);
+        const centerX = (pond.x / WORLD_WIDTH) * minimapWidth + ((pond.width / WORLD_WIDTH) * minimapWidth) / 2;
+        const centerY = (pond.y / WORLD_HEIGHT) * minimapHeight + ((pond.height / WORLD_HEIGHT) * minimapHeight) / 2;
+        const radiusX = ((pond.width / WORLD_WIDTH) * minimapWidth) / 2;
+        const radiusY = ((pond.height / WORLD_HEIGHT) * minimapHeight) / 2;
         
         // Draw pond
-        minimapCtx.fillRect(mapX - 1, mapY - 1, mapWidth + 2, mapHeight + 2);
+        minimapCtx.beginPath();
+        minimapCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+        minimapCtx.fill();
         
         // Add border for visibility
         minimapCtx.strokeStyle = '#0277BD';
-        minimapCtx.strokeRect(mapX - 1, mapY - 1, mapWidth + 2, mapHeight + 2);
+        minimapCtx.beginPath();
+        minimapCtx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+        minimapCtx.stroke();
     });
             // Draw rocks as gray dots
             minimapCtx.fillStyle = '#777';
@@ -2148,6 +2204,9 @@ function playAmmoSound() {
         height: PLAYER_SIZE - 20
     };
     
+    // Calculate player center coordinates - ADD THESE LINES
+    const playerCenterX = newX + PLAYER_SIZE/2;
+    const playerCenterY = newY + PLAYER_SIZE/2;
     // Check collision with trees
     for (const tree of gameObjects.trees) {
         const treeSize = tree.size || 70;
@@ -2188,6 +2247,30 @@ function playAmmoSound() {
         ) {
             return true; // Collision detected
         }
+    }
+     // Check deep water collision (allow wading at edges but not deep water)
+    for (const pond of gameObjects.ponds) {
+        // Calculate pond center and radiuses
+        const pondCenterX = pond.x + pond.width/2;
+        const pondCenterY = pond.y + pond.height/2;
+        const pondRadiusX = pond.width/2;
+        const pondRadiusY = pond.height/2;
+        
+        // Calculate normalized distance from center (elliptical equation)
+        // For a point (x,y) in an ellipse with center (h,k) and radii a,b:
+        // ((x-h)/a)² + ((y-k)/b)² <= 1 means the point is inside the ellipse
+        const dx = (playerCenterX - pondCenterX) / pondRadiusX;
+        const dy = (playerCenterY - pondCenterY) / pondRadiusY;
+        const distanceSquared = dx*dx + dy*dy;
+        
+        // If player is deeper than 70% into the pond (from edge to center), block movement
+        // This allows the player to wade in the shallow edges (30% from the edge)
+        if (distanceSquared < 0.7*0.7) {  // Using 0.7² to avoid square root calculation
+            return true; // Too deep in water
+        }
+        
+        // Optional: Add movement penalty when in shallow water
+        // This would be handled elsewhere in movement code
     }
     
     return false; // No collision
@@ -2360,8 +2443,8 @@ function drawClouds() {
     
     // Create fewer clouds with larger minimum size
     // and make them move horizontally
-    const cloudSpacingX = 800; // Increased spacing (fewer clouds)
-    const cloudSpacingY = 500; // Increased vertical spacing
+    const cloudSpacingX = 1200; // Increased from 800 for larger world
+    const cloudSpacingY = 800;  // Increased from 500 for larger world
     
     // Determine visible area based on camera position
     const visibleLeft = cameraX;
@@ -2375,7 +2458,7 @@ function drawClouds() {
          baseY += cloudSpacingY) {
         
         // For each row, create fewer clouds
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 5; i++) {
             // Create a cloud with consistent movement based on position
             const seed = baseY * 0.1 + i * 1000;
             const random = Math.abs(Math.sin(seed)) * 10000 % 1;
@@ -2393,8 +2476,8 @@ function drawClouds() {
             if (baseX < -cloudSpacingX) baseX += WORLD_WIDTH + cloudSpacingX;
             
             // Determine cloud size (larger minimum size)
-            const minSize = 120; // Increased minimum size
-            const maxSize = 200;
+            const minSize = 220; // Increased minimum size
+            const maxSize = 500;
             const sizeVariation = Math.max(0.5, 1 - (baseY / WORLD_HEIGHT));
             const cloudSize = minSize + (maxSize - minSize) * sizeVariation * random;
             
