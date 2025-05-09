@@ -325,7 +325,8 @@ let isMusicMuted = false;
             coins: [],
             ammoPacks: [],
             baitPacks: [],
-            ponds: []
+            ponds: [],
+            decorativeLakes: [] 
         };
         let currentBait = 5; // Start with 5 bait
         const MAX_BAIT = 10; // Maximum bait capacity
@@ -902,7 +903,31 @@ async function deleteAccount() {
                     3, 3
                 );
             });
-            
+              minimapCtx.fillStyle = '#B8E3FF';
+    gameObjects.decorativeLakes.forEach(lake => {
+        minimapCtx.fillRect(
+            (lake.x / WORLD_WIDTH) * minimapWidth - 1,
+            (lake.y / WORLD_HEIGHT) * minimapHeight - 1,
+            ((lake.width / WORLD_WIDTH) * minimapWidth) + 2,
+            ((lake.height / WORLD_HEIGHT) * minimapHeight) + 2
+        );
+    });
+    
+    // Draw fishable ponds as darker blue (so they're distinguishable)
+      minimapCtx.fillStyle = '#4FC3F7';
+    gameObjects.ponds.forEach(pond => {
+        const mapX = (pond.x / WORLD_WIDTH) * minimapWidth;
+        const mapY = (pond.y / WORLD_HEIGHT) * minimapHeight;
+        const mapWidth = Math.max(3, (pond.width / WORLD_WIDTH) * minimapWidth);
+        const mapHeight = Math.max(3, (pond.height / WORLD_HEIGHT) * minimapHeight);
+        
+        // Draw pond
+        minimapCtx.fillRect(mapX - 1, mapY - 1, mapWidth + 2, mapHeight + 2);
+        
+        // Add border for visibility
+        minimapCtx.strokeStyle = '#0277BD';
+        minimapCtx.strokeRect(mapX - 1, mapY - 1, mapWidth + 2, mapHeight + 2);
+    });
             // Draw rocks as gray dots
             minimapCtx.fillStyle = '#777';
             gameObjects.rocks.forEach(rock => {
@@ -1177,7 +1202,7 @@ function shootBullet() {
 
 // 4. Add sound effect function
 function playShootSound() {
-    playSound('gun.mp3', 0.2);
+    playSound('snowball-shoot.mp3', 0.2);
 }
 function updateAmmoDisplay() {
     const ammoDisplay = document.getElementById('ammoDisplay');
@@ -1613,6 +1638,7 @@ function drawPixelatedGrass() {
         }
     }
 }
+
 function checkBulletObstacleCollision(bullet) {
     // Check rocks
     for (const rock of gameObjects.rocks) {
@@ -1653,124 +1679,79 @@ function createHitEffect(x, y) {
 }
 
 // Function to update the water animation to look like ice
-function drawIceAnimation(drawX, drawY, pond) {
-    const time = Date.now() * 0.001;
-    
-    // Draw ice cracks pattern
-    ctx.strokeStyle = 'rgba(200, 230, 255, 0.6)';
-    ctx.lineWidth = 1.5;
-    
-    // Create ice crack patterns
-    for (let i = 0; i < 5; i++) {
-        const yOffset = (i * pond.height/5) + Math.sin(time * 0.5 + i) * 3;
-        
-        if (yOffset > 0 && yOffset < pond.height) {
-            ctx.beginPath();
-            ctx.moveTo(drawX + pond.width * 0.2, drawY + yOffset);
-            
-            // Create jagged line for ice cracks
-            for (let x = 0; x <= 6; x++) {
-                const waveX = drawX + pond.width * (0.2 + x * 0.1);
-                const waveY = drawY + yOffset + Math.sin(time * 1.5 + x * 2 + i) * 3;
-                ctx.lineTo(waveX, waveY);
-            }
-            
-            ctx.stroke();
-        }
-    }
-    
-    // Add ice shine highlights
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.beginPath();
-    ctx.ellipse(
-        drawX + pond.width * 0.7,
-        drawY + pond.height * 0.3,
-        pond.width * 0.15,
-        pond.height * 0.1,
-        Math.PI / 4,
-        0, Math.PI * 2
-    );
-    ctx.fill();
-}
-
-// Update drawPonds function to make ponds look like frozen ponds
-function drawIce() {
-    gameObjects.ponds.forEach(pond => {
-        const drawX = pond.x - cameraX;
-        const drawY = pond.y - cameraY;
+function drawDecorativeLakes() {
+    gameObjects.decorativeLakes.forEach(lake => {
+        const drawX = lake.x - cameraX;
+        const drawY = lake.y - cameraY;
         
         // Only draw if visible on screen (with buffer)
         if (
-            drawX + pond.width >= -100 &&
+            drawX + lake.width >= -100 &&
             drawX <= canvas.width + 100 &&
-            drawY + pond.height >= -100 &&
+            drawY + lake.height >= -100 &&
             drawY <= canvas.height + 100
         ) {
-            // Try to draw sprite, fallback to colored shape
-            try {
-                ctx.drawImage(pondSprite, drawX, drawY, pond.width, pond.height);
-            } catch (e) {
-                // Fallback to icy blue oval
-                ctx.fillStyle = '#A5D8FF'; // Light blue for ice
-                ctx.beginPath();
-                ctx.ellipse(
-                    drawX + pond.width/2, 
-                    drawY + pond.height/2, 
-                    pond.width/2, 
-                    pond.height/2, 
-                    0, 0, Math.PI * 2
-                );
-                ctx.fill();
-                
-                // Add some detail to the frozen pond
-                ctx.fillStyle = '#D6EAFF'; // Even lighter blue
-                ctx.beginPath();
-                ctx.ellipse(
-                    drawX + pond.width/2, 
-                    drawY + pond.height/2, 
-                    pond.width/3, 
-                    pond.height/3, 
-                    0, 0, Math.PI * 2
-                );
-                ctx.fill();
-                
-                // Add ripple effects replaced with ice cracks
-                drawIceRipples(drawX, drawY, pond);
-            }
+            // Use the same ice drawing style as your existing ponds
+            // but make them slightly lighter to differentiate
+            ctx.fillStyle = '#B8E3FF'; // Slightly lighter blue than fishable ponds
+            ctx.beginPath();
+            ctx.ellipse(
+                drawX + lake.width/2, 
+                drawY + lake.height/2, 
+                lake.width/2, 
+                lake.height/2, 
+                0, 0, Math.PI * 2
+            );
+            ctx.fill();
             
-            // Animate ice by drawing semi-transparent cracks
-            drawIceAnimation(drawX, drawY, pond);
+            // Add inner detail
+            ctx.fillStyle = '#E0F4FF'; // Even lighter blue
+            ctx.beginPath();
+            ctx.ellipse(
+                drawX + lake.width/2, 
+                drawY + lake.height/2, 
+                lake.width/3, 
+                lake.height/3, 
+                0, 0, Math.PI * 2
+            );
+            ctx.fill();
+            
+            // Draw ice cracks and ripples
+            drawDecorativeIceRipples(drawX, drawY, lake);
+            
+            // Animate ice effects
+            drawDecorativeIceAnimation(drawX, drawY, lake);
         }
     });
 }
 
-// Update drawPondRipples to look like ice cracks
-function drawIceRipples(drawX, drawY, pond) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+// 3. Adapted ice ripples function for decorative lakes
+function drawDecorativeIceRipples(drawX, drawY, lake) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // Slightly more transparent than ponds
     ctx.lineWidth = 1;
     
-    // Draw 3 elliptical cracks
-    for (let i = 0; i < 3; i++) {
-        const seed = i * 1000 + pond.x + pond.y;
-        const cracksScale = 0.7 + (i * 0.1);
+    // Draw 4 elliptical cracks (more than ponds for larger size)
+    for (let i = 0; i < 4; i++) {
+        const seed = i * 1000 + lake.x + lake.y + 500; // Different seed pattern
+        const cracksScale = 0.7 + (i * 0.08);
         
         ctx.beginPath();
         ctx.ellipse(
-            drawX + pond.width/2, 
-            drawY + pond.height/2, 
-            pond.width/2 * cracksScale, 
-            pond.height/2 * cracksScale, 
+            drawX + lake.width/2, 
+            drawY + lake.height/2, 
+            lake.width/2 * cracksScale, 
+            lake.height/2 * cracksScale, 
             0, 0, Math.PI * 2
         );
         ctx.stroke();
         
-        // Add some jagged lines for cracks
-        const numCracks = 3 + i;
+        // Add radiating cracks
+        const numCracks = 4 + i; // More cracks for larger lakes
         for (let j = 0; j < numCracks; j++) {
-            const angle = (seed + j * 1000) % 628 / 100; // 0 to 2π
-            const startX = drawX + pond.width/2;
-            const startY = drawY + pond.height/2;
-            const length = (pond.width/2) * (0.3 + (j % 3) * 0.2);
+            const angle = (seed + j * 1000) % 628 / 100;
+            const startX = drawX + lake.width/2;
+            const startY = drawY + lake.height/2;
+            const length = (lake.width/2) * (0.4 + (j % 3) * 0.2);
             
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -1778,10 +1759,10 @@ function drawIceRipples(drawX, drawY, pond) {
             // Create jagged line
             let currentX = startX;
             let currentY = startY;
-            const segments = 3 + (j % 3);
+            const segments = 4 + (j % 3);
             
             for (let k = 0; k < segments; k++) {
-                const segmentAngle = angle + (Math.sin(k * 1.5) * 0.2);
+                const segmentAngle = angle + (Math.sin(k * 1.7) * 0.25);
                 const segmentLength = length / segments;
                 
                 currentX += Math.cos(segmentAngle) * segmentLength;
@@ -1794,6 +1775,76 @@ function drawIceRipples(drawX, drawY, pond) {
         }
     }
 }
+
+// 4. Adapted ice animation function for decorative lakes
+function drawDecorativeIceAnimation(drawX, drawY, lake) {
+    const time = Date.now() * 0.001;
+    
+    // Draw ice cracks pattern
+    ctx.strokeStyle = 'rgba(200, 230, 255, 0.5)'; // Slightly more transparent
+    ctx.lineWidth = 1.5;
+    
+    // Create ice crack patterns (more for larger lakes)
+    for (let i = 0; i < 7; i++) {
+        const yOffset = (i * lake.height/7) + Math.sin(time * 0.4 + i) * 4;
+        
+        if (yOffset > 0 && yOffset < lake.height) {
+            ctx.beginPath();
+            ctx.moveTo(drawX + lake.width * 0.15, drawY + yOffset);
+            
+            // Create jagged line for ice cracks
+            for (let x = 0; x <= 8; x++) {
+                const waveX = drawX + lake.width * (0.15 + x * 0.0875);
+                const waveY = drawY + yOffset + Math.sin(time * 1.3 + x * 2.2 + i) * 4;
+                ctx.lineTo(waveX, waveY);
+            }
+            
+            ctx.stroke();
+        }
+    }
+    
+    // Add multiple ice shine highlights for larger area
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    
+    // Main highlight
+    ctx.beginPath();
+    ctx.ellipse(
+        drawX + lake.width * 0.6,
+        drawY + lake.height * 0.3,
+        lake.width * 0.12,
+        lake.height * 0.08,
+        Math.PI / 5,
+        0, Math.PI * 2
+    );
+    ctx.fill();
+    
+    // Secondary highlight
+    ctx.beginPath();
+    ctx.ellipse(
+        drawX + lake.width * 0.75,
+        drawY + lake.height * 0.6,
+        lake.width * 0.08,
+        lake.height * 0.05,
+        -Math.PI / 6,
+        0, Math.PI * 2
+    );
+    ctx.fill();
+    
+    // Moving frost pattern
+    const frostTime = (time * 0.5) % 1;
+    ctx.fillStyle = 'rgba(245, 250, 255, 0.15)';
+    ctx.beginPath();
+    ctx.ellipse(
+        drawX + lake.width * (0.2 + frostTime * 0.6),
+        drawY + lake.height * (0.4 + Math.sin(time) * 0.2),
+        lake.width * 0.1,
+        lake.height * 0.05,
+        time,
+        0, Math.PI * 2
+    );
+    ctx.fill();
+}
+
 
 function drawPonds() {
     gameObjects.ponds.forEach(pond => {
@@ -2086,7 +2137,7 @@ function playHitConfirmSound() {
     });
 }
 function playAmmoSound() {
-    playSound('ammo-sound.mp3', 0.4);
+    playSound('snowball-get.mp3', 0.5);
 }
         function checkCollision(player, newX, newY) {
     // Define player hitbox with some padding for better gameplay
@@ -2196,7 +2247,7 @@ function playCoinSound() {
            
             // Draw rocks
            
-            
+             drawDecorativeLakes();
             //draw ponds
             drawPonds();
             //drawIce();
@@ -2639,9 +2690,33 @@ function createSnowflakeAtCamera() {
         }
     }
 }
+let currentFishingPond = null;
+function findNearestPond(playerX, playerY) {
+    let nearestPond = null;
+    let shortestDistance = Infinity;
+    
+    for (const pond of gameObjects.ponds) {
+        // Calculate distance from player center to pond center
+        const playerCenterX = playerX + PLAYER_SIZE/2;
+        const playerCenterY = playerY + PLAYER_SIZE/2;
+        const pondCenterX = pond.x + pond.width/2;
+        const pondCenterY = pond.y + pond.height/2;
+        
+        const distance = Math.sqrt(
+            Math.pow(playerCenterX - pondCenterX, 2) + 
+            Math.pow(playerCenterY - pondCenterY, 2)
+        );
+        
+        if (distance < shortestDistance) {
+            shortestDistance = distance;
+            nearestPond = pond;
+        }
+    }
+    
+    return { pond: nearestPond, distance: shortestDistance };
+}
 
-
-        function isPlayerInWater() {
+      function isPlayerInWater() {
     if (!myId || !players[myId]) return false;
     
     const player = players[myId];
@@ -2666,6 +2741,8 @@ function createSnowflakeAtCamera() {
 
 
 // Start fishing minigame
+
+
 function startFishing() {
     if (isFishing) return;
     
@@ -2675,6 +2752,18 @@ function startFishing() {
         addChatMessage('System', 'You need bait to fish! Find bait packs around the map.');
         return;
     }
+    
+    // Find the nearest pond and store it for the entire fishing session
+    const player = players[myId];
+    const { pond: nearestPond, distance } = findNearestPond(player.x, player.y);
+    
+    if (!nearestPond) {
+        addChatMessage('System', "You're not close enough to a fishing spot!");
+        return;
+    }
+    
+    // Store the pond for the entire fishing session
+    currentFishingPond = nearestPond;
     
     isFishing = true;
     fishingProgress = 0;
@@ -2696,6 +2785,7 @@ function startFishing() {
         if (isFishing) {
             // If player didn't click in time, fishing fails
             isFishing = false;
+            currentFishingPond = null; // Reset fishing pond
             playSound('missedFish.mp3', 1);
             addChatMessage('System', 'You missed your chance! The fish got away.');
         }
@@ -2707,76 +2797,85 @@ function startFishing() {
 
 // Handle fishing progress
 function drawFishingProgress() {
-    if (!isFishing) return;
+  if (!isFishing) return;
     
     const player = players[myId];
     const drawX = player.x - cameraX;
     const drawY = player.y - cameraY;
     
-    // Draw fishing line from player to water
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(drawX + PLAYER_SIZE/2, drawY + PLAYER_SIZE/2);
+     // Find the nearest pond to target
+     const pond = currentFishingPond;
     
-    // Find closest pond point for fishing line
-    let nearestPondPoint = { x: drawX + PLAYER_SIZE/2, y: drawY + PLAYER_SIZE/2 + 100 };
-    for (const pond of gameObjects.ponds) {
-        const pondCenterX = pond.x - cameraX + pond.width/2;
-        const pondCenterY = pond.y - cameraY + pond.height/2;
+    if (pond) {  
+        // Get player center coordinates
+        const playerCenterX = player.x + PLAYER_SIZE/2;
+        const playerCenterY = player.y + PLAYER_SIZE/2;
         
-        // Simplified nearest point calculation - this could be improved
-        nearestPondPoint = { 
-            x: pondCenterX, 
-            y: pondCenterY 
-        };
+        // Get pond center coordinates
+        const pondCenterX = pond.x + pond.width/2; 
+        const pondCenterY = pond.y + pond.height/2;  
+        
+        // Convert to screen coordinates
+        const rodEndX = pondCenterX - cameraX;
+        const rodEndY = pondCenterY - cameraY;
+        
+        // Draw fishing line from player to pond center
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(drawX + PLAYER_SIZE/2, drawY + PLAYER_SIZE/2);
+        ctx.lineTo(rodEndX, rodEndY);
+        ctx.stroke();
+        
+        // Draw fishing float at the pond center
+        ctx.fillStyle = '#FF0000';
+        ctx.beginPath();
+        ctx.arc(rodEndX, rodEndY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Add bobber ripples centered in pond
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        const time = Date.now() * 0.003;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(rodEndX, rodEndY, 8 + i * 4 + time % 10, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     }
     
-    // Draw fishing line
-    ctx.lineTo(nearestPondPoint.x, nearestPondPoint.y);
-    ctx.stroke();
-    
-    // Draw fishing float
-    ctx.fillStyle = '#FF0000';
-    ctx.beginPath();
-    ctx.arc(nearestPondPoint.x, nearestPondPoint.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw fishing progress bar
+    // Draw fishing progress bar 
     const progressBarWidth = 200;
     const progressBarHeight = 30;
     const progressBarX = (canvas.width - progressBarWidth) / 2;
     const progressBarY = canvas.height - 100;
     
     // Update fishing progress based on time
-    fishingProgress = (Date.now() % 1000) / 1000; // 0 to 1 value cycling every 1 seconds
+    fishingProgress = (Date.now() % 1000) / 1000;
     
-    // 1. Draw progress bar background first
+    // Draw progress bar background
     ctx.fillStyle = '#332727';
     ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
     
-    // 2. Draw success zone (30% of the bar width, positioned randomly)
+    // Draw success zone
     const successZoneWidth = progressBarWidth * 0.3;
-    
-    // Position success zone based on a repeating pattern with pseudo-randomness
-    const timeOffset = Math.floor(Date.now() / 3000); // Changes every 3 seconds
+    const timeOffset = Math.floor(Date.now() / 3000);
     const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
     const successZoneStart = progressBarX + successZonePosition;
     
-    ctx.fillStyle = '#8bf0a8'; // Green color for success zone
+    ctx.fillStyle = '#8bf0a8';
     ctx.fillRect(successZoneStart, progressBarY, successZoneWidth, progressBarHeight);
     
-    // 3. Draw progress indicator LAST so it's always on top
+    // Draw progress indicator
     const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
     ctx.fillStyle = '#c23636';
     ctx.fillRect(indicatorPos - 2, progressBarY, 4, progressBarHeight);
     
-    // Check if the indicator is in the success zone
+    // Check if in success zone
     const inSuccessZone = 
         indicatorPos >= successZoneStart && 
         indicatorPos <= successZoneStart + successZoneWidth;
     
-    // Add "CLICK NOW!" text if in success zone
     if (inSuccessZone) {
         ctx.fillStyle = '#FF0000';
         ctx.font = 'bold 20px Arial';
@@ -2784,14 +2883,14 @@ function drawFishingProgress() {
         ctx.fillText('CLICK NOW!', canvas.width / 2, progressBarY - 10);
     }
     
-    // THIS IS THE KEY CHANGE: Setup click handler for both success and failure
+    // Setup click handler
     canvas.onclick = function() {
         if (inSuccessZone) {
-            catchFish(true); // Success!
+            catchFish(true);
         } else {
-            catchFish(false); // Failed - clicked outside success zone
+            catchFish(false);
         }
-        canvas.onclick = null; // Remove click handler after click
+        canvas.onclick = null;
     };
 }
 // Handle caught fish
@@ -2801,7 +2900,7 @@ function catchFish(success) {
     // Clear fishing timeout
     clearTimeout(fishingTimeout);
     isFishing = false;
-    
+     currentFishingPond = null;
     if (success) {
         // Request a fish from the server
         socket.emit('catch_fish');

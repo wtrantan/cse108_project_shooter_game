@@ -125,7 +125,8 @@ const gameObjects = {
     coins: [],
     ammoPacks: [], // Add this new array
     baitPacks: [],
-    ponds: [] // New ponds array
+    ponds: [], // New ponds array
+     decorativeLakes: [] // New purely cosmetic frozen lakes
 };
 const fishTypes = [
     {
@@ -222,6 +223,8 @@ function generateGameObjects(mapWidth, mapHeight) {
     gameObjects.coins = [];
     gameObjects.ammoPacks = []; 
     gameObjects.ponds = [];
+    gameObjects.decorativeLakes = []; // Clear decorative lakes too
+    
     
     // Generate trees (20-30)
     const treeCount = Math.floor(Math.random() * 11) + 20;
@@ -245,26 +248,105 @@ function generateGameObjects(mapWidth, mapHeight) {
         });
     }
 
-    const pondCount =1;
-    for (let i = 0; i < pondCount; i++) {
-        // Make ponds different sizes
-        const pondWidth = Math.floor(Math.random() * 150) + 200; // 200-350
-        const pondHeight = Math.floor(Math.random() * 100) + 150; // 150-250
+     // Generate decorative frozen lakes FIRST (3-5)
+    const decorativeLakeCount = Math.floor(Math.random() * 3) + 3;
+    for (let i = 0; i < decorativeLakeCount; i++) {
+        // Make decorative lakes larger than ponds
+        const lakeWidth = Math.floor(Math.random() * 250) + 300; // 300-550
+        const lakeHeight = Math.floor(Math.random() * 150) + 200; // 200-350
         
-        // Find a location that doesn't overlap with trees or rocks
+        // Find a location that doesn't overlap with other objects
         let validLocation = false;
-        let pondX, pondY;
+        let lakeX, lakeY;
         let attempts = 0;
         
         while (!validLocation && attempts < 50) {
             attempts++;
+            lakeX = Math.random() * (mapWidth - lakeWidth);
+            lakeY = Math.random() * (mapHeight - lakeHeight);
+            
+            // Check for overlap with all existing objects
+            let overlap = false;
+            
+            // Check overlap with trees
+            for (const tree of gameObjects.trees) {
+                if (
+                    lakeX < tree.x + tree.size &&
+                    lakeX + lakeWidth > tree.x &&
+                    lakeY < tree.y + tree.size &&
+                    lakeY + lakeHeight > tree.y
+                ) {
+                    overlap = true;
+                    break;
+                }
+            }
+            
+            // Check overlap with rocks
+            if (!overlap) {
+                for (const rock of gameObjects.rocks) {
+                    if (
+                        lakeX < rock.x + rock.size &&
+                        lakeX + lakeWidth > rock.x &&
+                        lakeY < rock.y + rock.size &&
+                        lakeY + lakeHeight > rock.y
+                    ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check overlap with other decorative lakes
+            if (!overlap) {
+                for (const lake of gameObjects.decorativeLakes) {
+                    const distance = Math.sqrt(
+                        Math.pow(lakeX + lakeWidth/2 - (lake.x + lake.width/2), 2) +
+                        Math.pow(lakeY + lakeHeight/2 - (lake.y + lake.height/2), 2)
+                    );
+                    if (distance < 400) { // Minimum distance between decorative lakes
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            validLocation = !overlap;
+        }
+        
+        // Add the decorative lake
+        if (validLocation) {
+            gameObjects.decorativeLakes.push({
+                id: `decorative-lake-${i}`,
+                x: lakeX,
+                y: lakeY,
+                width: lakeWidth,
+                height: lakeHeight,
+                isDecorative: true
+            });
+        }
+    }
+
+    // NOW generate fishable ponds (5-8) that avoid decorative lakes
+    const pondCount = Math.floor(Math.random() * 4) + 5; // 5-8 ponds
+    for (let i = 0; i < pondCount; i++) {
+        // Make ponds smaller so they fit better on the map
+        const pondWidth = Math.floor(Math.random() * 100) + 150; // 150-250
+        const pondHeight = Math.floor(Math.random() * 80) + 120; // 120-200
+        
+        // Find a location that doesn't overlap with other objects
+        let validLocation = false;
+        let pondX, pondY;
+        let attempts = 0;
+        
+        while (!validLocation && attempts < 100) { // Increased attempts for more ponds
+            attempts++;
             pondX = Math.random() * (mapWidth - pondWidth);
             pondY = Math.random() * (mapHeight - pondHeight);
             
-            // Check for overlap with trees and rocks
+            // Check for overlap with all objects
             let overlap = false;
             
-            // Simple overlap check - could be improved for production
+            // Check trees
             for (const tree of gameObjects.trees) {
                 if (
                     pondX < tree.x + tree.size &&
@@ -277,6 +359,7 @@ function generateGameObjects(mapWidth, mapHeight) {
                 }
             }
             
+            // Check rocks
             if (!overlap) {
                 for (const rock of gameObjects.rocks) {
                     if (
@@ -285,6 +368,35 @@ function generateGameObjects(mapWidth, mapHeight) {
                         pondY < rock.y + rock.size &&
                         pondY + pondHeight > rock.y
                     ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check decorative lakes - IMPORTANT: Avoid overlap with ice lakes!
+            if (!overlap) {
+                for (const lake of gameObjects.decorativeLakes) {
+                    if (
+                        pondX < lake.x + lake.width &&
+                        pondX + pondWidth > lake.x &&
+                        pondY < lake.y + lake.height &&
+                        pondY + pondHeight > lake.y
+                    ) {
+                        overlap = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check other ponds - maintain minimum distance between ponds
+            if (!overlap) {
+                for (const pond of gameObjects.ponds) {
+                    const distance = Math.sqrt(
+                        Math.pow(pondX + pondWidth/2 - (pond.x + pond.width/2), 2) +
+                        Math.pow(pondY + pondHeight/2 - (pond.y + pond.height/2), 2)
+                    );
+                    if (distance < 250) { // Minimum distance between ponds
                         overlap = true;
                         break;
                     }
@@ -359,7 +471,7 @@ function generateGameObjects(mapWidth, mapHeight) {
          });
      }
      
-     console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${coinCount} coins, ${ammoPackCount} ammo packs, and ${baitPackCount} bait packs`);
+     console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${decorativeLakeCount} frozen lakes, ${coinCount} coins, ${ammoPackCount} ammo packs, and ${baitPackCount} bait packs`);
 }
 function updateServerBullets() {
     const currentTime = Date.now();
