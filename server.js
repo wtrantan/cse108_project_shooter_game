@@ -218,6 +218,11 @@ const BULLET_DAMAGE = 10;
 const BULLET_LIFETIME = 5000; // 5 seconds max bullet lifetime
 const MAX_AMMO = 10; // Maximum ammo capacity
 const AMMO_PACK_SIZE = 5 // Amount of ammo in each pack
+
+//sprite collision size
+const COIN_SIZE = 20;
+const AMMO_SIZE = 70;
+const BAIT_PACK_SIZE = 60;
 function generateGameObjects(mapWidth, mapHeight) {
     // Clear existing objects
     gameObjects.trees = [];
@@ -483,56 +488,75 @@ function generateGameObjects(mapWidth, mapHeight) {
     
     // Generate coins (10-15)
     const coinCount = Math.floor(Math.random() * 10) + 20;
-    for (let i = 0; i < coinCount; i++) {
-        gameObjects.coins.push({
-            id: `coin-${i}`,
-            x: Math.random() * (mapWidth - 30),  // Adjust for coin size
-            y: Math.random() * (mapHeight - 30),
-            collected: false
-        });
-    }
+   
+for (let i = 0; i < coinCount; i++) {
+    // Find a valid position for the coin
+    const position = findValidItemPosition(COIN_SIZE, mapWidth, mapHeight, gameObjects);
+    
+    gameObjects.coins.push({
+        id: `coin-${i}`,
+        x: position.x,
+        y: position.y,
+        collected: false
+    });
+}
     const ammoPackCount = Math.floor(Math.random() * 10) + 10; // Increased from 5-10 to 10-19
-    for (let i = 0; i < ammoPackCount; i++) {
-        gameObjects.ammoPacks.push({
-            id: `ammo-${i}`,
-            x: Math.random() * (mapWidth - 30),
-            y: Math.random() * (mapHeight - 30),
-            collected: false
-        });
-    }
+   
+for (let i = 0; i < ammoPackCount; i++) {
+    // Find a valid position for the ammo pack
+    const position = findValidItemPosition(AMMO_SIZE, mapWidth, mapHeight, gameObjects);
+    
+    gameObjects.ammoPacks.push({
+        id: `ammo-${i}`,
+        x: position.x,
+        y: position.y,
+        collected: false
+    });
+}
      // Generate bait packs (3-7) - tend to place closer to water
      const baitPackCount = Math.floor(Math.random() * 8) + 7; // Increased from 3-7 to 7-14
-     for (let i = 0; i < baitPackCount; i++) {
-         // Try to place some bait packs near ponds
-         let baitX, baitY;
-         
-         if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
-             // Choose a random pond
-             const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
-             
-             // Place bait pack near the pond (with some randomness)
-             const angle = Math.random() * Math.PI * 2;
-             const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
-             
-             baitX = pond.x + pond.width/2 + Math.cos(angle) * distance;
-             baitY = pond.y + pond.height/2 + Math.sin(angle) * distance;
-             
-             // Ensure bait pack is within map bounds
-             baitX = Math.max(0, Math.min(baitX, mapWidth - 30));
-             baitY = Math.max(0, Math.min(baitY, mapHeight - 30));
-         } else {
-             // Random position anywhere on the map
-             baitX = Math.random() * (mapWidth - 30);
-             baitY = Math.random() * (mapHeight - 30);
-         }
-         
-         gameObjects.baitPacks.push({
-             id: `bait-${i}`,
-             x: baitX,
-             y: baitY,
-             collected: false
-         });
-     }
+     
+for (let i = 0; i < baitPackCount; i++) {
+    // For bait, we prefer positions near water but not in deep water
+    let position;
+    
+    if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
+        // Choose a random pond
+        const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
+        
+        // Try to place near pond edge
+        const attempts = 10;
+        for (let j = 0; j < attempts; j++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
+            
+            const testX = pond.x + pond.width/2 + Math.cos(angle) * distance;
+            const testY = pond.y + pond.height/2 + Math.sin(angle) * distance;
+            
+            // Keep within map bounds
+            const x = Math.max(0, Math.min(testX, mapWidth - BAIT_PACK_SIZE));
+            const y = Math.max(0, Math.min(testY, mapHeight - BAIT_PACK_SIZE));
+            
+            // Check if position is valid
+            if (isValidItemPosition(x, y, BAIT_PACK_SIZE, gameObjects)) {
+                position = { x, y };
+                break;
+            }
+        }
+    }
+    
+    // If we couldn't find a position near water or random chance, find any valid position
+    if (!position) {
+        position = findValidItemPosition(BAIT_PACK_SIZE, mapWidth, mapHeight, gameObjects);
+    }
+    
+    gameObjects.baitPacks.push({
+        id: `bait-${i}`,
+        x: position.x,
+        y: position.y,
+        collected: false
+    });
+}
      
      console.log(`Generated ${treeCount} trees, ${rockCount} rocks, ${pondCount} ponds, ${decorativeLakeCount} frozen lakes, ${coinCount} coins, ${ammoPackCount} ammo packs, and ${baitPackCount} bait packs`);
 }
@@ -1634,45 +1658,54 @@ socket.on('collect_bait', (baitPackId) => {
             
             // Generate a new bait pack after some time
             setTimeout(() => {
-                if (Object.keys(players).length > 0) {  // Only if players still in game
-                    // Try to place some bait packs near ponds
-                    let baitX, baitY;
+            if (Object.keys(players).length > 0) {
+               
+                let position;
+                
+                // Try to place near a pond first
+                if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
+                    // Choose a random pond
+                    const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
                     
-                    if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
-                        // Choose a random pond
-                        const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
-                        
-                        // Place bait pack near the pond (with some randomness)
+                    // Try a few positions around the pond
+                    for (let i = 0; i < 10; i++) {
                         const angle = Math.random() * Math.PI * 2;
                         const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
                         
-                        baitX = pond.x + pond.width/2 + Math.cos(angle) * distance;
-                        baitY = pond.y + pond.height/2 + Math.sin(angle) * distance;
+                        const x = pond.x + pond.width/2 + Math.cos(angle) * distance;
+                        const y = pond.y + pond.height/2 + Math.sin(angle) * distance;
                         
-                        // Ensure bait pack is within map bounds
-                        baitX = Math.max(0, Math.min(baitX, 2000 - 30));
-                        baitY = Math.max(0, Math.min(baitY, 1500 - 30));
-                    } else {
-                        // Random position anywhere on the map
-                        baitX = Math.random() * (2000 - 30);
-                        baitY = Math.random() * (1500 - 30);
+                        // Keep within map bounds
+                        const boundedX = Math.max(0, Math.min(x, WORLD_WIDTH - BAIT_PACK_SIZE));
+                        const boundedY = Math.max(0, Math.min(y, WORLD_HEIGHT - BAIT_PACK_SIZE));
+                        
+                        if (isValidItemPosition(boundedX, boundedY, BAIT_PACK_SIZE, gameObjects)) {
+                            position = { x: boundedX, y: boundedY };
+                            break;
+                        }
                     }
-                    
-                    const newBaitPack = {
-                        id: `bait-${Date.now()}`,
-                        x: baitX,
-                        y: baitY,
-                        collected: false
-                    };
-                    
-                    // Remove collected bait pack and add new one
-                    gameObjects.baitPacks = gameObjects.baitPacks.filter(b => !b.collected);
-                    gameObjects.baitPacks.push(newBaitPack);
-                    
-                    // Broadcast updated game objects
-                    io.emit('game_state', { players, gameObjects });
                 }
-            }, 15000);  // Generate new bait pack after 15 seconds
+                
+                // If we couldn't find a position near water, find any valid position
+                if (!position) {
+                    position = findValidItemPosition(BAIT_PACK_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
+                }
+                
+                const newBaitPack = {
+                    id: `bait-${Date.now()}`,
+                    x: position.x,
+                    y: position.y,
+                    collected: false
+                };
+                
+                // Remove collected bait pack and add new one
+                gameObjects.baitPacks = gameObjects.baitPacks.filter(b => !b.collected);
+                gameObjects.baitPacks.push(newBaitPack);
+                
+                // Broadcast updated game objects
+                io.emit('game_state', { players, gameObjects });
+            }
+        }, 15000);  // Generate new bait pack after 15 seconds
         }
     }
 });
@@ -1685,7 +1718,7 @@ socket.on('update_bait', (data) => {
 });
 socket.on('collect_ammo', (ammoPackId) => {
     if (players[socket.id]) {
-        const username = players[socket.id].username;
+      //  const username = players[socket.id].username;
         
         // Find the ammo pack
         const ammoPackIndex = gameObjects.ammoPacks.findIndex(ap => ap.id === ammoPackId);
@@ -1711,22 +1744,26 @@ socket.on('collect_ammo', (ammoPackId) => {
             
             // Generate a new ammo pack after some time
             setTimeout(() => {
-                if (Object.keys(players).length > 0) {  // Only if players still in game
-                    const newAmmoPack = {
-                        id: `ammo-${Date.now()}`,
-                        x: Math.random() * 1970,
-                        y: Math.random() * 1470,
-                        collected: false
-                    };
-                    
-                    // Remove collected ammo pack and add new one
-                    gameObjects.ammoPacks = gameObjects.ammoPacks.filter(a => !a.collected);
-                    gameObjects.ammoPacks.push(newAmmoPack);
-                    
-                    // Broadcast updated game objects
-                    io.emit('game_state', { players, gameObjects });
-                }
-            }, 10000);  // Generate new ammo pack after 10 seconds
+            if (Object.keys(players).length > 0) {
+                // Find a valid position for the new ammo pack
+
+                const position = findValidItemPosition(AMMO_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
+                
+                const newAmmoPack = {
+                    id: `ammo-${Date.now()}`,
+                    x: position.x,
+                    y: position.y,
+                    collected: false
+                };
+                
+                // Remove collected ammo pack and add new one
+                gameObjects.ammoPacks = gameObjects.ammoPacks.filter(a => !a.collected);
+                gameObjects.ammoPacks.push(newAmmoPack);
+                
+                // Broadcast updated game objects
+                io.emit('game_state', { players, gameObjects });
+            }
+        }, 10000);  // Generate new ammo pack after 10 seconds
         }
     }
 });
@@ -1771,22 +1808,26 @@ socket.on('collect_coin', (coinId) => {
             
             // Generate a new coin after some time
             setTimeout(() => {
-                if (Object.keys(players).length > 0) {  // Only if players still in game
-                    const newCoin = {
-                        id: `coin-${Date.now()}`,
-                        x: Math.random() * 1970,
-                        y: Math.random() * 1470,
-                        collected: false
-                    };
-                    
-                    // Remove collected coin and add new one
-                    gameObjects.coins = gameObjects.coins.filter(c => !c.collected);
-                    gameObjects.coins.push(newCoin);
-                    
-                    // Broadcast updated game objects
-                    io.emit('game_state', { players, gameObjects });
-                }
-            }, 5000);  // Generate new coin after 5 seconds
+            if (Object.keys(players).length > 0) {  // Only if players still in game
+                // Find a valid position for the new coin
+              
+                const position = findValidItemPosition(COIN_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
+                
+                const newCoin = {
+                    id: `coin-${Date.now()}`,
+                    x: position.x,
+                    y: position.y,
+                    collected: false
+                };
+                
+                // Remove collected coin and add new one
+                gameObjects.coins = gameObjects.coins.filter(c => !c.collected);
+                gameObjects.coins.push(newCoin);
+                
+                // Broadcast updated game objects
+                io.emit('game_state', { players, gameObjects });
+            }
+        }, 5000);  // Generate new coin after 5 seconds
         }
     }
 });
@@ -2178,6 +2219,129 @@ function handlePlayerHit(playerId, bullet) {
     //     username: 'System',
     //     message: `${players[shooterId].username} hit ${players[playerId].username}! (+${BULLET_DAMAGE}/-${BULLET_DAMAGE} points)`
     // });
+}
+function isValidItemPosition(x, y, size, gameObjects) {
+    const itemHitbox = {
+        x: x,
+        y: y,
+        width: size,
+        height: size
+    };
+    
+    // Check overlap with trees
+    for (const tree of gameObjects.trees) {
+        const treeSize = tree.size || 70;
+        const treeHitbox = {
+            x: tree.x + treeSize * 0.2,
+            y: tree.y + treeSize * 0.5,
+            width: treeSize * 0.6,
+            height: treeSize * 0.5
+        };
+        
+        if (
+            itemHitbox.x < treeHitbox.x + treeHitbox.width &&
+            itemHitbox.x + itemHitbox.width > treeHitbox.x &&
+            itemHitbox.y < treeHitbox.y + treeHitbox.height &&
+            itemHitbox.y + itemHitbox.height > treeHitbox.y
+        ) {
+            return false; // Overlaps with tree
+        }
+    }
+    
+    // Check overlap with rocks
+    for (const rock of gameObjects.rocks) {
+        const rockSize = rock.size || 40;
+        const rockHitbox = {
+            x: rock.x + rockSize * 0.1,
+            y: rock.y + rockSize * 0.1,
+            width: rockSize * 0.8,
+            height: rockSize * 0.8
+        };
+        
+        if (
+            itemHitbox.x < rockHitbox.x + rockHitbox.width &&
+            itemHitbox.x + itemHitbox.width > rockHitbox.x &&
+            itemHitbox.y < rockHitbox.y + rockHitbox.height &&
+            itemHitbox.y + itemHitbox.height > rockHitbox.y
+        ) {
+            return false; // Overlaps with rock
+        }
+    }
+    
+    // Check if in deep part of ponds
+    for (const pond of gameObjects.ponds) {
+        // Calculate center point of item
+        const itemCenterX = x + size/2;
+        const itemCenterY = y + size/2;
+        
+        // Calculate pond center and radiuses
+        const pondCenterX = pond.x + pond.width/2;
+        const pondCenterY = pond.y + pond.height/2;
+        const pondRadiusX = pond.width/2;
+        const pondRadiusY = pond.height/2;
+        
+        // Calculate normalized distance from center (elliptical equation)
+        const dx = (itemCenterX - pondCenterX) / pondRadiusX;
+        const dy = (itemCenterY - pondCenterY) / pondRadiusY;
+        const distanceSquared = dx*dx + dy*dy;
+        
+        // If item is deeper than 70% into the pond (same as player collision logic), reject position
+        if (distanceSquared < 0.7*0.7) {
+            return false; // Too deep in water
+        }
+    }
+    
+    return true; // Position is valid
+}
+
+// Add this function to find a valid position for items
+function findValidItemPosition(itemSize, worldWidth, worldHeight, gameObjects, maxAttempts = 30) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Generate random position
+        const x = Math.random() * (worldWidth - itemSize);
+        const y = Math.random() * (worldHeight - itemSize);
+        
+        // Check if position is valid
+        if (isValidItemPosition(x, y, itemSize, gameObjects)) {
+            return { x, y };
+        }
+    }
+    
+    // If no valid position found after max attempts, use a simpler approach
+    // Just try to avoid deep water, don't worry about other objects
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const x = Math.random() * (worldWidth - itemSize);
+        const y = Math.random() * (worldHeight - itemSize);
+        
+        // Only check pond overlaps
+        let inDeepWater = false;
+        
+        for (const pond of gameObjects.ponds) {
+            const itemCenterX = x + itemSize/2;
+            const itemCenterY = y + itemSize/2;
+            const pondCenterX = pond.x + pond.width/2;
+            const pondCenterY = pond.y + pond.height/2;
+            const pondRadiusX = pond.width/2;
+            const pondRadiusY = pond.height/2;
+            const dx = (itemCenterX - pondCenterX) / pondRadiusX;
+            const dy = (itemCenterY - pondCenterY) / pondRadiusY;
+            
+            if (dx*dx + dy*dy < 0.7*0.7) {
+                inDeepWater = true;
+                break;
+            }
+        }
+        
+        if (!inDeepWater) {
+            return { x, y };
+        }
+    }
+    
+    // Last resort - just return a random position
+    return {
+        x: Math.random() * (worldWidth - itemSize),
+        y: Math.random() * (worldHeight - itemSize)
+    };
 }
 setInterval(updateServerBullets, 33); // ~30 updates per second
 // Start the server
