@@ -16,9 +16,19 @@ const io = socketIO(server);
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
-
+//keep alive
+if (process.env.PROJECT_DOMAIN) {
+    require('./keep-alive.js');
+}
 // Initialize SQLite database
-const db = new sqlite3.Database('./gamedb.sqlite');
+const dataDir = path.join(__dirname, '.data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+}
+const db = new sqlite3.Database(path.join(dataDir, 'gamedb.sqlite'));
+
+// Log the database location for verification
+console.log(`Database initialized at: ${path.join(dataDir, 'gamedb.sqlite')}`);
 
 // Create tables if they don't exist
 db.serialize(() => {
@@ -49,9 +59,24 @@ db.serialize(() => {
     `);
     console.log('Database initialized');
 });
+function cleanupAndSetupAdmin() {
+    // First, clean up all admin users
+    db.run('DELETE FROM users WHERE is_admin = 1', [], function(err) {
+        if (err) {
+            console.error('Error cleaning up admin users:', err);
+            return;
+        }
+        console.log(`Deleted ${this.changes} admin user(s)`);
+        
+        // After cleanup, create the new admin from env variables
+        setTimeout(ensureAdminExists, 1000); // Wait a second before creating new
+    });
+}
+
 function ensureAdminExists() {
-    const adminUsername = 'admin';
-    const adminPassword = 'admin123'; // You should change this to a secure password
+    // Get admin credentials from environment variables
+    const adminUsername = process.env.ADMIN_USER || 'admin';
+    const adminPassword = process.env.ADMIN_PASS || 'admin123';
     
     db.get('SELECT * FROM users WHERE username = ?', [adminUsername], async (err, row) => {
         if (err) {
@@ -72,12 +97,22 @@ function ensureAdminExists() {
                         console.error('Failed to create admin user:', err);
                         return;
                     }
-                    console.log('Admin user created successfully');
+                    console.log('Admin user created successfully with username:', adminUsername);
                 }
             );
+        } else {
+            console.log('Admin user already exists with username:', adminUsername);
         }
     });
 }
+
+// Replace your existing call with this:
+db.serialize(() => {
+    // Your table creation code...
+    
+    // Clean up and setup admin user
+    cleanupAndSetupAdmin();
+});
 
 // Call this function after initializing the database
 ensureAdminExists();
@@ -633,6 +668,9 @@ app.post('/api/delete-fish', async (req, res) => {
     }
 });
 
+app.get('/ping', (req, res) => {
+    res.status(200).send('OK');
+});
 
 // Admin login route
 app.post('/api/admin/login', async (req, res) => {
@@ -678,7 +716,17 @@ app.post('/api/admin/login', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-
+// app.use('/admin', (req, res, next) => {
+//     const basicAuth = require('basic-auth');
+//     const user = basicAuth(req);
+    
+//     if (!user || user.name !== process.env.ADMIN_USER || user.pass !== process.env.ADMIN_PASS) {
+//         res.set('WWW-Authenticate', 'Basic realm="Admin Area"');
+//         return res.status(401).send('Authentication required');
+//     }
+    
+//     next();
+// });
 // Middleware to verify admin token
 function verifyAdminToken(req, res, next) {
     const token = req.headers['x-admin-token'];
@@ -1936,7 +1984,7 @@ function handlePlayerHit(playerId, bullet) {
 }
 setInterval(updateServerBullets, 33); // ~30 updates per second
 // Start the server
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
