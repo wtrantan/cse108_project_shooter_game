@@ -828,6 +828,97 @@ app.post('/api/update-color', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+// API endpoint to change username
+app.post('/api/change-username', async (req, res) => {
+    try {
+        const { currentPassword, newUsername, username } = req.body;
+
+        if (!currentPassword || !newUsername || !username) {
+            return res.status(400).json({ error: 'Current password and new username are required' });
+        }
+
+        db.get('SELECT password FROM users WHERE username = ?', [username], async (err, user) => {
+            if (err) {
+                console.error('Database error (get user):', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            const passwordMatch = await bcrypt.compare(currentPassword, user.password);
+
+            if (!passwordMatch) {
+                return res.status(401).json({ error: 'Invalid current password' });
+            }
+
+            // Check if the new username already exists
+            db.get('SELECT username FROM users WHERE username = ?', [newUsername], (getUsernameErr, row) => {
+                if (getUsernameErr) {
+                    console.error('Database error (check username):', getUsernameErr);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                if (row) {
+                    return res.status(400).json({ error: 'New username already exists' });
+                }
+
+                db.run('UPDATE users SET username = ? WHERE username = ?', [newUsername, username], function(runErr) {
+                    if (runErr) {
+                        console.error('Database error (update username):', runErr);
+                        return res.status(500).json({ error: 'Failed to change username' });
+                    }
+                    return res.status(200).json({ message: 'Username changed successfully' });
+                });
+            });
+        });
+    } catch (error) {
+        console.error('Change username error (outer):', error);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// API endpoint to change password
+app.post('/api/change-password', async (req, res) => {
+    try {
+        const { currentPassword, newPassword, username } = req.body;
+
+        if (!currentPassword || !newPassword || !username) {
+            return res.status(400).json({ error: 'Current password and new password are required' });
+        }
+
+        db.get('SELECT password FROM users WHERE username = ?', [username], async (err, user) => {
+            if (err) {
+                console.error('Database error (get user):', err);  // Log the error
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            const passwordMatch = await bcrypt.compare(currentPassword, user.password);
+
+            if (!passwordMatch) {
+                return res.status(401).json({ error: 'Invalid current password' });
+            }
+
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+            db.run('UPDATE users SET password = ? WHERE username = ?', [hashedPassword, username], function(runErr) { // Changed err name
+                if (runErr) {
+                    console.error('Database error (update password):', runErr); // Log the error
+                    return res.status(500).json({ error: 'Failed to change password' });
+                }
+                return res.status(200).json({ message: 'Password changed successfully' });
+            });
+        });
+    } catch (error) {
+        console.error('Change password error (outer):', error);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
 app.post('/api/delete-fish', async (req, res) => {
     try {
         const { username, fishId } = req.body;

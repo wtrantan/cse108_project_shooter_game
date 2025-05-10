@@ -275,6 +275,40 @@
             color: #000;
             cursor: pointer;
         }
+        /* Basic modal styling (you can customize this) */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px; /* Could be more or less, depending on screen size */
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -357,11 +391,32 @@
                 <button id="applyColorButton">Apply</button>
             </div>
             <hr>
+            <button id="change-username-btn">Change Username</button>
+            <button id="change-password-btn">Change Password</button>
             <div class="setting-group">
                 <button id="logoutButton" class="secondary">Log Out</button>
             </div>
             <div class="setting-group">
                 <button id="deleteAccountButton" class="danger">Delete Account</button>
+            </div>
+        </div>
+        <div id="change-password-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h3>Change Password</h3>
+                <input type="password" id="current-password-change" placeholder="Current Password">
+                <input type="password" id="new-password-change" placeholder="New Password">
+                <button id="save-password-btn">Save Password</button>
+            </div>
+        </div>
+        
+        <div id="change-username-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h3>Change Username</h3>
+                <input type="password" id="current-password-username" placeholder="Current Password">
+                <input type="text" id="new-username" placeholder="New Username">
+                <button id="save-username-btn">Save Username</button>
             </div>
         </div>
         <div class="minimap" id="minimap"></div>
@@ -405,7 +460,92 @@
 // Get the settings button and menu elements
 const settingsToggleButton = document.getElementById('settingsToggleButton');
         const settingsMenu = document.getElementById('settingsMenu');
+        const changePasswordBtn = document.getElementById('change-password-btn');
+const changeUsernameBtn = document.getElementById('change-username-btn');
+const changePasswordModal = document.getElementById('change-password-modal');
+const changeUsernameModal = document.getElementById('change-username-modal');
+const savePasswordBtn = document.getElementById('save-password-btn');
+const saveUsernameBtn = document.getElementById('save-username-btn');
+const closePasswordModal = document.querySelectorAll('#change-password-modal .close');
+const closeUsernameModal = document.querySelectorAll('#change-username-modal .close');
 
+
+changePasswordBtn.addEventListener('click', () => {
+    changePasswordModal.style.display = 'block';
+});
+
+changeUsernameBtn.addEventListener('click', () => {
+    changeUsernameModal.style.display = 'block';
+});
+
+closePasswordModal.forEach(closeBtn => {
+    closeBtn.addEventListener('click', () => {
+        changePasswordModal.style.display = 'none';
+    });
+});
+
+closeUsernameModal.forEach(closeBtn => {
+    closeBtn.addEventListener('click', () => {
+        changeUsernameModal.style.display = 'none';
+    });
+});
+
+window.addEventListener('click', (event) => {
+    if (event.target === changePasswordModal) {
+        changePasswordModal.style.display = 'none';
+    }
+    if (event.target === changeUsernameModal) {
+        changeUsernameModal.style.display = 'none';
+    }
+});
+
+savePasswordBtn.addEventListener('click', async () => {
+    const currentPassword = document.getElementById('current-password-change').value;
+    const newPassword = document.getElementById('new-password-change').value;
+
+    const response = await fetch('/api/change-password', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ currentPassword, newPassword, username })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        alert(data.message);
+        changePasswordModal.style.display = 'none';
+        window.location.reload();
+    } else {
+        alert(data.error);
+    }
+});
+
+saveUsernameBtn.addEventListener('click', async () => {
+    const currentPassword = document.getElementById('current-password-username').value;
+    const newUsername = document.getElementById('new-username').value;
+
+    const response = await fetch('/api/change-username', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ currentPassword, newUsername, username })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+        alert(data.message);
+        localStorage.setItem('username', newUsername);  // Update local storage
+        username = newUsername; // Update the username variable
+        changeUsernameModal.style.display = 'none';
+        window.location.reload();
+    } else {
+        alert(data.error);
+    }
+});
         // Add a click event listener to the settings button
         settingsToggleButton.addEventListener('click', () => {
             // Toggle the display of the settings menu
