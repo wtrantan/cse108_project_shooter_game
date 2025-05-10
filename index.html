@@ -186,6 +186,95 @@
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
     font-weight: bold;
 }
+#settingsMenu {
+            position: absolute;
+            top: 250px; /* Adjusted top position */
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+            width: 250px;
+            display: none; /* Initially hidden */
+        }
+
+        #settingsMenu h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        #settingsMenu .setting-group {
+            margin-bottom: 15px;
+        }
+
+        #settingsMenu .setting-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        #settingsMenu .setting-group input[type="color"] {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        #settingsMenu .setting-group button {
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            text-align: center;
+        }
+
+        #settingsMenu .setting-group button:hover {
+            background-color: #45a049;
+        }
+
+        #settingsMenu hr {
+            margin: 10px 0;
+            border: 0;
+            border-top: 1px solid #ddd;
+        }
+
+        #settingsMenu .setting-group button.secondary {
+            background-color: #777;
+        }
+
+        #settingsMenu .setting-group button.secondary:hover {
+            background-color: #666;
+        }
+
+        #settingsMenu .setting-group button.danger {
+            background-color: #f44336;
+            color: white;
+        }
+
+        #settingsMenu .setting-group button.danger:hover {
+            background-color: #d32f2f;
+        }
+        #settingsToggleButton {
+            position: absolute;
+            top: 10 px;
+            right: 230px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+            z-index: 101; /* Ensure it's above other elements */
+            color: #000;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -259,13 +348,21 @@
         <div class="scoreDisplay" id="scoreDisplay">Score: 0</div>
         <div class="ammoDisplay" id="ammoDisplay">Ammo: 30/50</div>
         <div class="baitDisplay" id="baitDisplay">Bait: 5/10</div>
-        <div class="colorPicker">
-            <p>Change your color:</p>
-            <input type="color" id="colorPicker" value="#FF0000">
-            <button id="applyColorButton">Apply</button>
-            <hr style="margin: 10px 0;">
-            <button id="logoutButton" class="secondary">Log Out</button>
-            <button id="deleteAccountButton" style="background-color: #f44336;">Delete Account</button>
+        <button id="settingsToggleButton">Settings</button>
+        <div id="settingsMenu">
+            <h2>Settings</h2>
+            <div class="setting-group">
+                <label>Change your color:</label>
+                <input type="color" id="colorPicker" value="#FF0000">
+                <button id="applyColorButton">Apply</button>
+            </div>
+            <hr>
+            <div class="setting-group">
+                <button id="logoutButton" class="secondary">Log Out</button>
+            </div>
+            <div class="setting-group">
+                <button id="deleteAccountButton" class="danger">Delete Account</button>
+            </div>
         </div>
         <div class="minimap" id="minimap"></div>
         <div id="chatBox">
@@ -305,6 +402,19 @@
     'splash.mp3': 0,
     'trashcan.mp3': 0
 };
+// Get the settings button and menu elements
+const settingsToggleButton = document.getElementById('settingsToggleButton');
+        const settingsMenu = document.getElementById('settingsMenu');
+
+        // Add a click event listener to the settings button
+        settingsToggleButton.addEventListener('click', () => {
+            // Toggle the display of the settings menu
+            if (settingsMenu.style.display === 'none') {
+                settingsMenu.style.display = 'block';
+            } else {
+                settingsMenu.style.display = 'none';
+            }
+        });
 const backgroundMusic = new Audio('/background-music.mp3'); // Replace with your music file path
 backgroundMusic.loop = true; // Make music loop continuously
 backgroundMusic.volume = 0.3; // Set to 30% volume to start
