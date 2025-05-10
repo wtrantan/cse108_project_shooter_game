@@ -372,7 +372,7 @@ baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder
         const treeSprite = new Image();
 
         const fishSprites = {};
-for (let i = 1; i <= 10; i++) {
+for (let i = 1; i <= 12; i++) {
     fishSprites[`fish${i}`] = new Image();
     fishSprites[`fish${i}`].src = `/fish${i}.png`; // Create these images or use placeholders
 }
@@ -845,7 +845,7 @@ enhanceInitGame();
     
     // Sort inventory by rarity and size
     fishInventory.sort((a, b) => {
-        const rarityOrder = { 'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4 };
+        const rarityOrder = { 'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4, 'Mythical': 5 };
         return rarityOrder[b.rarity] - rarityOrder[a.rarity] || b.size - a.size;
     });
 });
@@ -3482,7 +3482,7 @@ function setupSocketHandlers() {
             
             // Sort inventory by rarity and size
             fishInventory.sort((a, b) => {
-                const rarityOrder = { 'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4 };
+                const rarityOrder = { 'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4, 'Mythical': 5 };
                 return rarityOrder[b.rarity] - rarityOrder[a.rarity] || b.size - a.size;
             });
             
@@ -3592,6 +3592,7 @@ function getRarityColor(rarity) {
         case 'Rare': return '#2196F3';
         case 'Epic': return '#9C27B0';
         case 'Legendary': return '#FFD700';
+        case 'Mythical': return '#cc0000';
         default: return '#AAAAAA';
     }
 }

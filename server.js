@@ -199,7 +199,7 @@ const fishTypes = [
         minSize: 60,
         maxSize: 120,
         rarity: "Epic",
-        chance: 0.007 // 0.7% chance
+        chance: 0.005 // 0.4% chance
     },
     {
         id: 10,
@@ -208,7 +208,24 @@ const fishTypes = [
         maxSize: 100,
         rarity: "Legendary",
         chance: 0.003 // 0.3% chance
+    }, 
+    {
+        id: 11,
+        name: "Kyogre",
+        minSize: 50,
+        maxSize: 100,
+        rarity: "Mythical",
+        chance: 0.001 // 0.1% chance
+    }, 
+    {
+        id: 12,
+        name: "Manaphy",
+        minSize: 50,
+        maxSize: 100,
+        rarity: "Mythical",
+        chance: 0.002 // 0.2% chance
     }
+    
 ];
 const WORLD_WIDTH = 4000;  // Make sure this matches your client-side value
 const WORLD_HEIGHT = 3000; // Make sure this matches your client-side value
