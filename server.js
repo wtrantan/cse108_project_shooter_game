@@ -2068,10 +2068,13 @@ function storeFishInDatabase(username, fish, callback) {
             return;
         }
         
-        // Insert fish into database
+        // Create a properly formatted ISO timestamp
+        const currentTime = new Date().toISOString();
+        
+        // Insert fish into database with explicit timestamp
         db.run(
-            'INSERT INTO fish (user_id, type_id, name, size, rarity) VALUES (?, ?, ?, ?, ?)',
-            [user.id, fish.typeId, fish.name, fish.size, fish.rarity],
+            'INSERT INTO fish (user_id, type_id, name, size, rarity, caught_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [user.id, fish.typeId, fish.name, fish.size, fish.rarity, currentTime],
             function(err) {
                 if (err) {
                     console.error('Error inserting fish:', err);

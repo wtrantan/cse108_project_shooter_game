@@ -388,7 +388,8 @@
     <div style="margin-bottom: 15px;">
         <h3 style="color: #FFC107; margin-bottom: 5px;">Fishing</h3>
         <p>Stand in a pond and press <b>F</b> to start fishing</p>
-        <p><b>Click</b> when the indicator is in the green zone to catch a fish</p>
+        <p>When the bobber dips underwater, <b>click</b> to hook the fish.</p>
+        <p>Then, <b>click</b> again when the indicator is in the green zone to catch it</p>
     </div>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #9C27B0; margin-bottom: 5px;">Inventory</h3>
@@ -583,9 +584,7 @@ saveUsernameBtn.addEventListener('click', async () => {
                 settingsMenu.style.display = 'none';
             }
         });
-const backgroundMusic = new Audio('/background-music.mp3'); // Replace with your music file path
-backgroundMusic.loop = true; // Make music loop continuously
-backgroundMusic.volume = 0.3; // Set to 30% volume to start
+
 let isMusicMuted = false;
         const SOUND_COOLDOWN = 300; // Adjust this value as needed
         let fishInventory = []; // Array to store caught fish
@@ -595,6 +594,11 @@ let isMusicMuted = false;
         let fishingSuccess = false;
         let fishingResult = null;
         let fishingTimeout = null;
+        let isFishingCast = false;    // New state for "rod is cast but waiting for bite"
+let fishingBobber = null;     // Track the bobber position and state
+let fishingBiteTimeout = null; // Timeout for when fish will bite
+let fishingFailTimeout = null; // Timeout for when fishing fails if no click
+let lastPondClicked = null;   // Remember which pond we're fishing in
         let myId = null;
         let playerScore = 0;
         let gameObjects = {
@@ -943,13 +947,103 @@ document.getElementById('toggleChatButton').addEventListener('click', toggleChat
 document.addEventListener('keydown', (e) => {
     // Check if the 'F' key was pressed (case-insensitive)
     if (e.key.toLowerCase() === 'f') {
-        // Only allow fishing when not already fishing and not typing in chat
-        if (!isFishing && !chatInputFocused && isPlayerInWater() && currentBait > 0) {
-            startFishing();
-        }
+         if (isPlayerInWater() && currentBait > 0) {
+                castFishingRod();
+            } else if (!isPlayerInWater()) {
+                addChatMessage('System', "You need to be at a fishing spot!");
+            } else if (currentBait <= 0) {
+                addChatMessage('System', "You need bait to fish!");
+                showBaitWarning();
+            }
     }
 });
 
+canvas.addEventListener('click', function(e) {
+    // Get click coordinates
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    // CASE 1: Handle bobber clicks when casting
+     if (isFishingCast && fishingBobber && fishingBobber.state === 'biting') {
+        // Clear timeouts
+        clearTimeout(fishingBiteTimeout);
+        clearTimeout(fishingFailTimeout);
+        
+        // Transition to the actual fishing minigame
+        isFishingCast = false;
+        startFishing();
+        
+        // IMPORTANT: Stop event from being processed further
+        return;
+    }
+     
+    // CASE 2: Handle early clicks on bobber when fish is not yet biting
+    if (isFishingCast && fishingBobber && fishingBobber.state === 'waiting') {
+        // Get bobber screen coordinates
+        const bobberDrawX = fishingBobber.x - cameraX;
+        const bobberDrawY = fishingBobber.y - cameraY;
+        
+        // Check if click is within bobber hitbox
+        const hitboxSize = 30;
+        if (
+            clickX >= bobberDrawX - hitboxSize/2 &&
+            clickX <= bobberDrawX + hitboxSize/2 &&
+            clickY >= bobberDrawY - hitboxSize/2 &&
+            clickY <= bobberDrawY + hitboxSize/2
+        ) {
+            // Clicked too early
+            addChatMessage('System', "Be patient! Wait for the fish to bite.");
+           // playSound('splash.mp3.mp3', 0.2);
+            
+            // Add more ripples for visual feedback
+            fishingBobber.ripples.push({
+                radius: 5,
+                opacity: 0.7
+            });
+            
+            // IMPORTANT: Stop event from being processed further
+            return;
+        }
+    }
+    
+    // CASE 3: Handle minigame clicks when fishing (only if we're in the minigame)
+    else if (isFishing) {
+        // Check if player clicked during the fishing minigame
+        const progressBarWidth = 200;
+        const progressBarHeight = 30;
+        const progressBarX = (canvas.width - progressBarWidth) / 2;
+        const progressBarY = canvas.height - 100;
+        
+        // Calculate the success zone position
+        const successZoneWidth = progressBarWidth * 0.3;
+        const timeOffset = Math.floor(Date.now() / 3000);
+        const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
+        const successZoneStart = progressBarX + successZonePosition;
+        
+        // Calculate current indicator position
+        const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
+        
+        // Check if indicator is in success zone
+        const inSuccessZone = 
+            indicatorPos >= successZoneStart && 
+            indicatorPos <= successZoneStart + successZoneWidth;
+        
+        // Handle fishing success or failure
+        if (inSuccessZone) {
+            // Success! Player clicked in the green zone
+            catchFish(true);
+        } else {
+            // Failed - player clicked outside the green zone
+            catchFish(false);
+        }
+        
+        // IMPORTANT: Stop event from being processed further
+        return;
+    }
+    
+    // Other click handlers can go here (if needed)
+});
 // Add 'E' key handler for fish inventory
 window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyE' && !chatInputFocused) {
@@ -2633,7 +2727,7 @@ function playAmmoSound() {
     return false; // No collision
 }
 function playCoinSound() {
-    playSound('coin-sound.mp3', 0.3);
+    playSound('coin-sound.mp3', 0.2);
 }
         
         function sendMessage() {
@@ -2702,7 +2796,7 @@ function playCoinSound() {
              
              // Draw ammo packs
             drawAmmoPacks();
-            if (isFishing) {
+            if (isFishing || isFishingCast) {
                 drawFishingProgress();
             }
     drawBaitPacks();
@@ -3240,43 +3334,118 @@ function findNearestPond(playerX, playerY) {
 
 // Start fishing minigame
 
-
-function startFishing() {
-    if (isFishing) return;
-    
-    // Check if player has bait
-    if (currentBait <= 0) {
-        // Show message that player needs bait
-        addChatMessage('System', 'You need bait to fish! Find bait packs around the map.');
-        return;
-    }
-    
-    // Find the nearest pond and store it for the entire fishing session
+function castFishingRod() {
     const player = players[myId];
-    const { pond: nearestPond, distance } = findNearestPond(player.x, player.y);
     
-    if (!nearestPond) {
+    // Find the nearest pond for the bobber position
+    const { pond, distance } = findNearestPond(player.x, player.y);
+    if (!pond || distance > 250) {
         addChatMessage('System', "You're not close enough to a fishing spot!");
         return;
     }
     
-    // Store the pond for the entire fishing session
-    currentFishingPond = nearestPond;
+    // Set fishing cast state
+    isFishingCast = true;
+    lastPondClicked = pond;
+    
+    
+   
+    
+    // Play casting sound
+    playSound('cast.mp3', 0.4);
+    
+    // Calculate bobber position - place it in the pond
+    // Get player center coordinates
+    const playerCenterX = player.x + PLAYER_SIZE/2;
+    const playerCenterY = player.y + PLAYER_SIZE/2;
+    
+    // Get pond center coordinates
+    const pondCenterX = pond.x + pond.width/2; 
+    const pondCenterY = pond.y + pond.height/2;
+    
+    // Calculate position slightly away from center (so it's not exactly in the middle)
+    // Create a vector from player to pond center
+    const vectorX = pondCenterX - playerCenterX;
+    const vectorY = pondCenterY - playerCenterY;
+    
+    // Normalize this vector
+    const length = Math.sqrt(vectorX * vectorX + vectorY * vectorY);
+    const normalizedX = vectorX / length;
+    const normalizedY = vectorY / length;
+    
+    // Calculate bobber position - a bit toward the player from center
+    const offsetRatio = 0.7; // 70% of the way from player to center
+    const bobberX = playerCenterX + normalizedX * length * offsetRatio;
+    const bobberY = playerCenterY + normalizedY * length * offsetRatio;
+    
+    // Store bobber data
+    fishingBobber = {
+        x: bobberX,
+        y: bobberY,
+        state: 'waiting', // Can be 'waiting', 'biting', or 'missed'
+        ripples: [],
+        lastRippleTime: Date.now(),
+        animationOffset: 0
+    };
+    
+    // Show message
+    //addChatMessage('System', "Fishing rod cast! Watch the bobber closely...");
+    
+    // Set a random timeout for when fish will bite (between 3-8 seconds)
+    const biteTime = 3000 + Math.random() * 5000;
+    fishingBiteTimeout = setTimeout(() => {
+        // Fish is biting!
+        if (fishingBobber) {
+            fishingBobber.state = 'biting';
+            playSound('splash.mp3', 0.5);
+            
+            // Create multiple ripples
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    if (fishingBobber) { // Check if still fishing
+                        fishingBobber.ripples.push({
+                            radius: 5,
+                            opacity: 1.0
+                        });
+                    }
+                }, i * 150); // Stagger ripples slightly
+            }
+            
+            // Set timeout for missed fish if not clicked within 2 seconds
+            fishingFailTimeout = setTimeout(() => {
+                if (isFishingCast && fishingBobber) {
+                    fishingBobber.state = 'missed';
+                    playSound('missedFish.mp3', 0.4);
+                  //  addChatMessage('System', "The fish got away! You weren't fast enough.");
+                    
+                    // Wait 2 seconds then reset
+                    setTimeout(() => {
+                        resetFishing();
+                    }, 2000);
+                }
+            }, 2000);
+        }
+    }, biteTime);
+}
+// Update your existing startFishing function
+function startFishing() {
+    if (isFishing) return;
+    
+    // Use the pond we already stored when casting
+    currentFishingPond = lastPondClicked;
     
     isFishing = true;
     fishingProgress = 0;
     fishingSuccess = false;
     fishingResult = null;
     
-    // Use bait instead of ammo
+    // Play sound effect
+   // playSound('splash.mp3', 0.3);
+    // Tell server we've used bait
+    socket.emit('update_bait', { bait: currentBait });
+    // Use bait
     currentBait--;
     updateBaitDisplay();
-    
-    // Show fishing message
-    //addChatMessage('System', 'Fishing started! Click when the indicator is in the green zone to catch a fish!');
-    
-    // Simulate rod casting animation
-    playSound('splash.mp3', 0.3);
     
     // Start fishing minigame
     fishingTimeout = setTimeout(() => {
@@ -3288,108 +3457,182 @@ function startFishing() {
             addChatMessage('System', 'You missed your chance! The fish got away.');
         }
     }, 3000); // 3 seconds to click
-
-    // Tell server we've used bait
-    socket.emit('update_bait', { bait: currentBait });
 }
-
+function resetFishing() {
+    isFishingCast = false;
+    fishingBobber = null;
+    
+    if (fishingBiteTimeout) {
+        clearTimeout(fishingBiteTimeout);
+        fishingBiteTimeout = null;
+    }
+    
+    if (fishingFailTimeout) {
+        clearTimeout(fishingFailTimeout);
+        fishingFailTimeout = null;
+    }
+    
+    lastPondClicked = null;
+}
 // Handle fishing progress
 function drawFishingProgress() {
-  if (!isFishing) return;
+    if (!isFishing && !isFishingCast) return;
     
     const player = players[myId];
     const drawX = player.x - cameraX;
     const drawY = player.y - cameraY;
     
-     // Find the nearest pond to target
-     const pond = currentFishingPond;
+    // Get pond to target
+    const pond = isFishingCast ? lastPondClicked : currentFishingPond;
     
-    if (pond) {  
+    if (pond) {
         // Get player center coordinates
         const playerCenterX = player.x + PLAYER_SIZE/2;
         const playerCenterY = player.y + PLAYER_SIZE/2;
         
-        // Get pond center coordinates
-        const pondCenterX = pond.x + pond.width/2; 
-        const pondCenterY = pond.y + pond.height/2;  
-        
-        // Convert to screen coordinates
-        const rodEndX = pondCenterX - cameraX;
-        const rodEndY = pondCenterY - cameraY;
-        
-        // Draw fishing line from player to pond center
+        // Draw fishing line from player to bobber or pond center
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(drawX + PLAYER_SIZE/2, drawY + PLAYER_SIZE/2);
-        ctx.lineTo(rodEndX, rodEndY);
+        
+        if (isFishingCast && fishingBobber) {
+            // Draw line to bobber
+            const bobberDrawX = fishingBobber.x - cameraX;
+            const bobberDrawY = fishingBobber.y - cameraY;
+            ctx.lineTo(bobberDrawX, bobberDrawY);
+        } else {
+            // Draw line to pond center (original behavior)
+            const pondCenterX = pond.x + pond.width/2 - cameraX;
+            const pondCenterY = pond.y + pond.height/2 - cameraY;
+            ctx.lineTo(pondCenterX, pondCenterY);
+        }
         ctx.stroke();
         
-        // Draw fishing float at the pond center
-        ctx.fillStyle = '#FF0000';
-        ctx.beginPath();
-        ctx.arc(rodEndX, rodEndY, 5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Add bobber ripples centered in pond
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = 1;
-        const time = Date.now() * 0.003;
-        for (let i = 0; i < 3; i++) {
+        if (isFishingCast && fishingBobber) {
+            // Draw bobber
+            const bobberDrawX = fishingBobber.x - cameraX;
+            const bobberDrawY = fishingBobber.y - cameraY;
+            
+            // Add slight bobbing animation
+            const time = Date.now() * 0.002;
+            const bobOffset = Math.sin(time) * 2;
+            
+            // Modify bobbing based on state
+            let yOffset = bobOffset;
+            if (fishingBobber.state === 'biting') {
+                // Make the bobber bounce more when biting
+                fishingBobber.animationOffset += 0.2;
+                if (fishingBobber.animationOffset > Math.PI * 2) {
+                    fishingBobber.animationOffset = 0;
+                }
+                yOffset = Math.sin(fishingBobber.animationOffset * 5) * 5;
+            } else if (fishingBobber.state === 'missed') {
+                // Make it look like it was pulled under briefly
+                yOffset = Math.sin(time * 3) * 1 + 3; // Smaller movement but lower in water
+            }
+            
+            // Draw bobber shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
             ctx.beginPath();
-            ctx.arc(rodEndX, rodEndY, 8 + i * 4 + time % 10, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.ellipse(bobberDrawX, bobberDrawY + 5, 6, 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw bobber (red and white)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(bobberDrawX, bobberDrawY + yOffset, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.arc(bobberDrawX, bobberDrawY + yOffset - 2, 4, 0, Math.PI, true);
+            ctx.fill();
+            
+            // Draw ripples
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = 1;
+            
+            // Automatically add gentle ripples occasionally
+            const now = Date.now();
+            if (now - fishingBobber.lastRippleTime > 2000 + Math.random() * 1000) {
+                fishingBobber.ripples.push({
+                    radius: 5,
+                    opacity: 0.5
+                });
+                fishingBobber.lastRippleTime = now;
+            }
+            
+            // Draw and update all ripples
+            for (let i = fishingBobber.ripples.length - 1; i >= 0; i--) {
+                const ripple = fishingBobber.ripples[i];
+                
+                ctx.globalAlpha = ripple.opacity;
+                ctx.beginPath();
+                ctx.arc(bobberDrawX, bobberDrawY + yOffset + 3, ripple.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+                
+                // Expand ripples
+                ripple.radius += 0.5;
+                ripple.opacity -= 0.02;
+                
+                // Remove faded ripples
+                if (ripple.opacity <= 0) {
+                    fishingBobber.ripples.splice(i, 1);
+                }
+            }
+            
+            // Instructions if fish is biting
+            if (fishingBobber.state === 'biting') {
+                ctx.fillStyle = '#FF0000';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('CLICK NOW!', bobberDrawX, bobberDrawY - 20);
+            }
         }
     }
     
-    // Draw fishing progress bar 
-    const progressBarWidth = 200;
-    const progressBarHeight = 30;
-    const progressBarX = (canvas.width - progressBarWidth) / 2;
-    const progressBarY = canvas.height - 100;
-    
-    // Update fishing progress based on time
-    fishingProgress = (Date.now() % 1000) / 1000;
-    
-    // Draw progress bar background
-    ctx.fillStyle = '#332727';
-    ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
-    
-    // Draw success zone
-    const successZoneWidth = progressBarWidth * 0.3;
-    const timeOffset = Math.floor(Date.now() / 3000);
-    const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
-    const successZoneStart = progressBarX + successZonePosition;
-    
-    ctx.fillStyle = '#8bf0a8';
-    ctx.fillRect(successZoneStart, progressBarY, successZoneWidth, progressBarHeight);
-    
-    // Draw progress indicator
-    const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
-    ctx.fillStyle = '#c23636';
-    ctx.fillRect(indicatorPos - 2, progressBarY, 4, progressBarHeight);
-    
-    // Check if in success zone
-    const inSuccessZone = 
-        indicatorPos >= successZoneStart && 
-        indicatorPos <= successZoneStart + successZoneWidth;
-    
-    if (inSuccessZone) {
-        ctx.fillStyle = '#FF0000';
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('CLICK NOW!', canvas.width / 2, progressBarY - 10);
-    }
-    
-    // Setup click handler
-    canvas.onclick = function() {
+    // If in fishing mode (after bite), show the original progress bar
+    if (isFishing) {
+        // Draw fishing progress bar (Your existing code)
+        const progressBarWidth = 200;
+        const progressBarHeight = 30;
+        const progressBarX = (canvas.width - progressBarWidth) / 2;
+        const progressBarY = canvas.height - 100;
+        
+        fishingProgress = (Date.now() % 1000) / 1000;
+        
+        // Draw progress bar background
+        ctx.fillStyle = '#332727';
+        ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
+        
+        // Draw success zone
+        const successZoneWidth = progressBarWidth * 0.3;
+        const timeOffset = Math.floor(Date.now() / 3000);
+        const successZonePosition = ((Math.sin(timeOffset) + 1) / 2) * (progressBarWidth - successZoneWidth);
+        const successZoneStart = progressBarX + successZonePosition;
+        
+        ctx.fillStyle = '#8bf0a8';
+        ctx.fillRect(successZoneStart, progressBarY, successZoneWidth, progressBarHeight);
+        
+        // Draw progress indicator
+        const indicatorPos = progressBarX + progressBarWidth * fishingProgress;
+        ctx.fillStyle = '#c23636';
+        ctx.fillRect(indicatorPos - 2, progressBarY, 4, progressBarHeight);
+        
+        // Check if in success zone
+        const inSuccessZone = 
+            indicatorPos >= successZoneStart && 
+            indicatorPos <= successZoneStart + successZoneWidth;
+        
         if (inSuccessZone) {
-            catchFish(true);
-        } else {
-            catchFish(false);
+            ctx.fillStyle = '#FF0000';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('CLICK NOW!', canvas.width / 2, progressBarY - 10);
         }
-        canvas.onclick = null;
-    };
+    }
 }
 // Handle caught fish
 function catchFish(success) {
@@ -3398,7 +3641,9 @@ function catchFish(success) {
     // Clear fishing timeout
     clearTimeout(fishingTimeout);
     isFishing = false;
-     currentFishingPond = null;
+    currentFishingPond = null;
+    resetFishing(); // Also reset the casting state
+    
     if (success) {
         // Request a fish from the server
         socket.emit('catch_fish');
@@ -4509,7 +4754,7 @@ function playSound(soundFile, volume = 0.5) {
 function setupGameMusic() {
     console.log("Setting up game music system with queue...");
     
-    // Define music tracks (add your actual music file paths here)
+    // Define music tracks
     const musicTracks = [
         '/background-music.mp3',
         '/Hateno-Village.mp3',
@@ -4520,8 +4765,10 @@ function setupGameMusic() {
     
     // Track state
     let currentTrackIndex = 0;
-    let isMusicPlaying = false;
+    let isMusicPlaying = true;
     let currentAudio = null;
+    let isShuffleEnabled = true; // Start with shuffle enabled
+    let playHistory = []; // Track played songs for better shuffle experience
     
     // Create UI control
     const musicControl = document.createElement('div');
@@ -4532,9 +4779,9 @@ function setupGameMusic() {
     
     // Add music toggle button
     const musicButton = document.createElement('button');
-    musicButton.textContent = '🎵 Music: OFF';
+    musicButton.textContent = '🎵 Music: ON';
     musicButton.style.padding = '5px 10px';
-    musicButton.style.backgroundColor = '#777';
+    musicButton.style.backgroundColor = '#4CAF50'; 
     musicButton.style.color = 'white';
     musicButton.style.border = 'none';
     musicButton.style.borderRadius = '3px';
@@ -4548,7 +4795,7 @@ function setupGameMusic() {
     trackInfo.style.padding = '2px 5px';
     trackInfo.style.borderRadius = '3px';
     trackInfo.style.marginTop = '3px';
-    trackInfo.style.display = 'none';
+    trackInfo.style.display = 'block';
     
     // Function to play a specific track
     function playTrack(index) {
@@ -4560,7 +4807,14 @@ function setupGameMusic() {
         
         // Create new audio element
         currentAudio = new Audio(musicTracks[index]);
-        currentAudio.volume = 0.3;
+        currentAudio.volume = 0.2;
+        
+        // Add to play history
+        playHistory.push(index);
+        // Keep history at reasonable size
+        if (playHistory.length > musicTracks.length * 2) {
+            playHistory.shift();
+        }
         
         // Set up event to play next track when this one ends
         currentAudio.addEventListener('ended', playNextTrack);
@@ -4579,12 +4833,46 @@ function setupGameMusic() {
         }
     }
     
+    // Function to get next track when in shuffle mode
+    function getNextShuffledTrack() {
+        if (musicTracks.length <= 1) return 0;
+        
+        // Create array of possible next tracks (excluding current)
+        const possibleTracks = Array.from(
+            { length: musicTracks.length }, 
+            (_, i) => i
+        ).filter(i => i !== currentTrackIndex);
+        
+        // Avoid repeating recent tracks if possible
+        if (playHistory.length > 0 && possibleTracks.length > 1) {
+            // Get last 2 played tracks if available
+            const recentTracks = playHistory.slice(-2);
+            // Filter out recently played tracks
+            const freshTracks = possibleTracks.filter(i => !recentTracks.includes(i));
+            // Use fresh tracks if available, otherwise use all possible tracks
+            if (freshTracks.length > 0) {
+                possibleTracks.length = 0;
+                possibleTracks.push(...freshTracks);
+            }
+        }
+        
+        // Pick random track from possible tracks
+        const randomIndex = Math.floor(Math.random() * possibleTracks.length);
+        return possibleTracks[randomIndex];
+    }
+    
     // Function to play next track in queue
     function playNextTrack() {
         if (!isMusicPlaying) return;
         
-        // Move to next track, loop back to beginning if needed
-        currentTrackIndex = (currentTrackIndex + 1) % musicTracks.length;
+        if (isShuffleEnabled) {
+            // Choose a random next track
+            currentTrackIndex = getNextShuffledTrack();
+        } else {
+            // Sequential play - move to next track, loop back to beginning if needed
+            currentTrackIndex = (currentTrackIndex + 1) % musicTracks.length;
+        }
+        
         playTrack(currentTrackIndex);
     }
     
@@ -4592,8 +4880,15 @@ function setupGameMusic() {
     function playPrevTrack() {
         if (!isMusicPlaying) return;
         
-        // Move to previous track, loop to end if at beginning
-        currentTrackIndex = (currentTrackIndex - 1 + musicTracks.length) % musicTracks.length;
+        if (isShuffleEnabled && playHistory.length > 1) {
+            // Go back in play history
+            playHistory.pop(); // Remove current track
+            currentTrackIndex = playHistory.pop() || 0; // Get previous track
+        } else {
+            // Sequential mode - move to previous track, loop to end if at beginning
+            currentTrackIndex = (currentTrackIndex - 1 + musicTracks.length) % musicTracks.length;
+        }
+        
         playTrack(currentTrackIndex);
     }
     
@@ -4619,7 +4914,7 @@ function setupGameMusic() {
     function updateTrackDisplay() {
         if (currentAudio && isMusicPlaying) {
             const trackName = getTrackName(musicTracks[currentTrackIndex]);
-            trackInfo.textContent = `♪ ${trackName} (${currentTrackIndex + 1}/${musicTracks.length})`;
+            trackInfo.textContent = `♪ ${trackName} (${currentTrackIndex + 1}/${musicTracks.length}) ${isShuffleEnabled ? '🔀' : '▶️'}`;
         }
     }
     
@@ -4642,6 +4937,21 @@ function setupGameMusic() {
         if (isMusicPlaying) {
             playPrevTrack();
         }
+    });
+    
+    // Shuffle button
+    const shuffleButton = document.createElement('button');
+    shuffleButton.textContent = '🔀';
+    shuffleButton.style.flex = '1';
+    shuffleButton.style.padding = '3px';
+    shuffleButton.style.backgroundColor = isShuffleEnabled ? '#4CAF50' : '#666';
+    shuffleButton.style.color = 'white';
+    shuffleButton.style.border = 'none';
+    shuffleButton.style.cursor = 'pointer';
+    shuffleButton.addEventListener('click', function() {
+        isShuffleEnabled = !isShuffleEnabled;
+        shuffleButton.style.backgroundColor = isShuffleEnabled ? '#4CAF50' : '#666';
+        updateTrackDisplay();
     });
     
     // Next track button
@@ -4677,14 +4987,23 @@ function setupGameMusic() {
     
     // Add all elements to UI
     controlsRow.appendChild(prevButton);
+    controlsRow.appendChild(shuffleButton);
     controlsRow.appendChild(nextButton);
     
     musicControl.appendChild(musicButton);
     musicControl.appendChild(trackInfo);
     musicControl.appendChild(controlsRow);
     
-    document.getElementById('gameContainer').appendChild(musicControl);
+    // Start playing immediately
+    setTimeout(() => {
+        if (isShuffleEnabled) {
+            // Start with a random track
+            currentTrackIndex = Math.floor(Math.random() * musicTracks.length);
+        }
+        playTrack(currentTrackIndex);
+    }, 1000);
     
+    document.getElementById('gameContainer').appendChild(musicControl);
     console.log("Music queue system setup complete");
 }
 
