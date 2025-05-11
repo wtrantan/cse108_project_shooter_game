@@ -980,32 +980,33 @@ canvas.addEventListener('click', function(e) {
      
     // CASE 2: Handle early clicks on bobber when fish is not yet biting
     if (isFishingCast && fishingBobber && fishingBobber.state === 'waiting') {
-        // Get bobber screen coordinates
-        const bobberDrawX = fishingBobber.x - cameraX;
-        const bobberDrawY = fishingBobber.y - cameraY;
-        
-        // Check if click is within bobber hitbox
-        const hitboxSize = 30;
-        if (
-            clickX >= bobberDrawX - hitboxSize/2 &&
-            clickX <= bobberDrawX + hitboxSize/2 &&
-            clickY >= bobberDrawY - hitboxSize/2 &&
-            clickY <= bobberDrawY + hitboxSize/2
-        ) {
-            // Clicked too early
-            addChatMessage('System', "Be patient! Wait for the fish to bite.");
-           // playSound('splash.mp3.mp3', 0.2);
-            
-            // Add more ripples for visual feedback
-            fishingBobber.ripples.push({
-                radius: 5,
-                opacity: 0.7
-            });
-            
-            // IMPORTANT: Stop event from being processed further
-            return;
-        }
+    // Any click while waiting for fish to bite will scare the fish away
+    playSound('splash.mp3', 0.5);
+    
+    // Add ripples to show disturbance
+    for (let i = 0; i < 4; i++) {
+        fishingBobber.ripples.push({
+            radius: 3 + i * 2,
+            opacity: 0.8
+        });
     }
+    
+    // Show message
+    addChatMessage('System', "You scared the fish away by clicking too early!");
+    
+    // Clear any pending timeouts
+    if (fishingBiteTimeout) {
+        clearTimeout(fishingBiteTimeout);
+    }
+    
+    // Reset fishing after a short delay to show the ripples
+    setTimeout(() => {
+        resetFishing();
+    }, 1000);
+    
+    // IMPORTANT: Stop event from being processed further
+    return;
+}
     
     // CASE 3: Handle minigame clicks when fishing (only if we're in the minigame)
     else if (isFishing) {
