@@ -628,7 +628,7 @@ baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder
         const treeSprite = new Image();
 
         const fishSprites = {};
-for (let i = 1; i <= 12; i++) {
+for (let i = 1; i <= 13; i++) {
     fishSprites[`fish${i}`] = new Image();
     fishSprites[`fish${i}`].src = `/fish${i}.png`; // Create these images or use placeholders
 }
@@ -3564,9 +3564,13 @@ function drawFishInventory() {
         Math.max(...fishInventory.map(fish => fish.size)) : 0;
     
     ctx.fillText(`Total Caught: ${totalFish}`, panelX + 30, statsY);
-    ctx.fillText(`Unique Types: ${uniqueTypes}/10`, panelX + 30, statsY + 25);
+    ctx.fillText(`Unique Types: ${uniqueTypes}/13`, panelX + 30, statsY + 25);
     ctx.fillText(`Largest Fish: ${largestFish} cm`, panelX + panelWidth - 200, statsY);
     
+ if (viewingFishDetails && selectedFish) {
+        drawFishDetails();
+    }
+  
     // Handle clicks in inventory
     canvas.onclick = handleInventoryClick;
 }
@@ -3575,7 +3579,8 @@ function drawFishInventory() {
 let viewingOtherPlayer = false;
 let viewingPlayerName = '';
 let currentSearchQuery = '';
-
+let selectedFish = null;
+let viewingFishDetails = false;
 // 3. Update click handling for search functionality
 function handleInventoryClick(e) {
     if (!isInventoryOpen) return;
@@ -3590,6 +3595,36 @@ function handleInventoryClick(e) {
     const panelX = (canvas.width - panelWidth) / 2;
     const panelY = (canvas.height - panelHeight) / 2;
     
+ if (viewingFishDetails) {
+        // Check if close button clicked
+        const detailWidth = Math.min(400, canvas.width - 100);
+        const detailHeight = Math.min(500, canvas.height - 100);
+        const detailX = (canvas.width - detailWidth) / 2;
+        const detailY = (canvas.height - detailHeight) / 2;
+        
+        if (canvasX >= detailX + detailWidth - 30 && 
+            canvasX <= detailX + detailWidth - 10 &&
+            canvasY >= detailY + 10 && 
+            canvasY <= detailY + 30) {
+            // Close button clicked
+            viewingFishDetails = false;
+            selectedFish = null;
+            drawFishInventory(); // Redraw inventory
+            return;
+        }
+        
+        // Check if clicked anywhere outside the detail panel to close
+        if (canvasX < detailX || canvasX > detailX + detailWidth ||
+            canvasY < detailY || canvasY > detailY + detailHeight) {
+            viewingFishDetails = false;
+            selectedFish = null;
+            drawFishInventory(); // Redraw inventory
+            return;
+        }
+        
+        return; // Don't process other inventory clicks while viewing details
+    }
+
     // Check if close button clicked
     if (
         canvasX >= panelX + panelWidth - 30 && 
@@ -3603,7 +3638,42 @@ function handleInventoryClick(e) {
         canvas.onclick = null; // Remove click handler
         return;
     }
-    
+    // Check if a fish item was clicked (add this new section)
+    if (!viewingFishDetails && fishInventory.length > 0) {
+        const itemSize = 100;
+        const columns = Math.floor((panelWidth - 40) / itemSize);
+        const startX = panelX + (panelWidth - (columns * itemSize)) / 2;
+        const viewportY = panelY + 100;
+        const scrollY = viewportY - inventoryScrollOffset;
+        
+        for (let i = 0; i < fishInventory.length; i++) {
+            const col = i % columns;
+            const row = Math.floor(i / columns);
+            const x = startX + col * itemSize;
+            const y = scrollY + row * itemSize;
+            
+            // Check if click is within this fish's area
+            if (canvasX >= x && canvasX <= x + itemSize - 10 &&
+                canvasY >= y && canvasY <= y + itemSize - 10) {
+                
+                // Avoid triggering on delete button area
+                const isDeleteButton = !viewingOtherPlayer && 
+                    canvasX >= x + itemSize - 25 && 
+                    canvasX <= x + itemSize - 10 &&
+                    canvasY >= y + 5 && 
+                    canvasY <= y + 20;
+                
+                if (!isDeleteButton) {
+                    // Show fish details!
+                    selectedFish = fishInventory[i];
+                    viewingFishDetails = true;
+                    //playSound('flip-page.mp3', 0.2);
+                    drawFishDetails();
+                    return;
+                }
+            }
+        }
+    }
     // Search input area dimensions
     const searchInputWidth = 200;
     const searchButtonWidth = 80;
@@ -3711,6 +3781,166 @@ function handleInventoryClick(e) {
         drawFishInventory();
         return;
     }
+}
+function drawFishDetails() {
+    if (!viewingFishDetails || !selectedFish) return;
+    
+    // Create semi-transparent background overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Create detail panel
+    const panelWidth = Math.min(400, canvas.width - 100);
+    const panelHeight = Math.min(500, canvas.height - 100);
+    const panelX = (canvas.width - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+    
+    // Draw panel background with subtle border
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+    ctx.strokeStyle = getRarityColor(selectedFish.rarity);
+    ctx.lineWidth = 4;
+    ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+    
+    // Draw close button
+    ctx.fillStyle = '#FF0000';
+    ctx.fillRect(panelX + panelWidth - 30, panelY + 10, 20, 20);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('×', panelX + panelWidth - 20, panelY + 25);
+    
+    // Draw fish name as title
+    ctx.fillStyle = '#333333';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(selectedFish.name, panelX + panelWidth/2, panelY + 40);
+    
+    // Draw rarity with appropriate color
+    ctx.fillStyle = getRarityColor(selectedFish.rarity);
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText(selectedFish.rarity, panelX + panelWidth/2, panelY + 70);
+    
+    // Draw fish image - large and centered
+    const fishImgSize = Math.min(panelWidth * 0.8, 200);
+    const fishImgX = panelX + (panelWidth - fishImgSize) / 2;
+    const fishImgY = panelY + 90;
+    
+    try {
+        const fishSprite = fishSprites[`fish${selectedFish.typeId}`];
+        ctx.drawImage(fishSprite, fishImgX, fishImgY, fishImgSize, fishImgSize * 0.8);
+    } catch (e) {
+        // Fallback to colored shape if sprite fails
+        ctx.fillStyle = getFishColor(selectedFish.typeId);
+        ctx.fillRect(fishImgX, fishImgY, fishImgSize, fishImgSize * 0.8);
+        
+        // Add fish shape details
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(
+            fishImgX + fishImgSize * 0.8, 
+            fishImgY + fishImgSize * 0.4, 
+            fishImgSize * 0.15, 
+            fishImgSize * 0.3, 
+            0, 0, Math.PI * 2
+        );
+        ctx.fill();
+    }
+    
+    // Draw fish details
+    const detailStartY = fishImgY + fishImgSize * 0.8 + 20;
+    ctx.fillStyle = '#333333';
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+    
+    // Show size with "ruler" visualization
+    ctx.fillText(`Size: ${selectedFish.size} cm`, panelX + 30, detailStartY);
+    
+    // Draw size visualization (ruler)
+    const rulerWidth = panelWidth - 60;
+    const rulerY = detailStartY + 20;
+    const maxPossibleSize = 450; // Largest possible fish in the game
+    const sizeRatio = selectedFish.size / maxPossibleSize;
+    
+    // Draw ruler background
+    ctx.fillStyle = '#EEEEEE';
+    ctx.fillRect(panelX + 30, rulerY, rulerWidth, 20);
+    
+    // Draw size indicator
+    ctx.fillStyle = getRarityColor(selectedFish.rarity);
+    ctx.fillRect(panelX + 30, rulerY, rulerWidth * sizeRatio, 20);
+    
+    // Draw ruler markings
+    ctx.strokeStyle = '#777777';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+        const markX = panelX + 30 + (rulerWidth / 10) * i;
+        ctx.beginPath();
+        ctx.moveTo(markX, rulerY);
+        ctx.lineTo(markX, rulerY + (i % 5 === 0 ? 15 : 10));
+        ctx.stroke();
+    }
+    
+    // Draw size text on the ruler
+    ctx.fillStyle = '#000000';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('0 cm', panelX + 30, rulerY + 35);
+    ctx.fillText(`${Math.round(maxPossibleSize)} cm`, panelX + 30 + rulerWidth, rulerY + 35);
+    
+    // Draw catch date if available
+    if (selectedFish.caughtAt) {
+        const catchDate = new Date(selectedFish.caughtAt);
+        const formattedDate = `${catchDate.toLocaleDateString()} ${catchDate.toLocaleTimeString()}`;
+        ctx.fillStyle = '#666666';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Caught on: ${formattedDate}`, panelX + panelWidth/2, rulerY + 60);
+    }
+    
+    // Add fish description based on type and rarity
+     const fishDescriptions = {
+        1: "The Common Carp is a hardy freshwater fish known for its resilience. These omnivores can survive in waters where other fish cannot, thanks to their ability to tolerate low oxygen levels and pollutants.",
+        2: "The Sunfish's vibrant colors light up any collection. Despite their small size, these aggressive little predators will fiercely defend their territory against much larger intruders.",
+        3: "Catfish are known for their distinctive whisker-like barbels used to taste and feel in murky waters. As bottom-feeders, they patrol the lake floor after dark searching for food.",
+        4: "The Bass is prized for its fighting spirit when caught. An apex predator in many lakes, its powerful jaws can swallow prey nearly half its own size.",
+        5: "The Rainbow Trout features a stunning spectrum of colors along its side. These agile swimmers prefer cool, oxygen-rich waters and are known for their spectacular leaping ability.",
+        6: "The Pike is a fearsome ambush predator with a torpedo-shaped body built for speed. Ancient folklore claims their sharp teeth and aggressive nature make them the 'water wolves'.",
+        7: "The Salmon's remarkable homing instinct allows it to return to its birthplace to spawn, sometimes traveling thousands of miles through changing salinity. Their determination is legendary.",
+        8: "The Golden Perch's scales shimmer like coins in the sunlight. Indigenous legends say possessing one brings wealth and prosperity to the fortunate angler.",
+        9: "The Sturgeon is a living fossil, virtually unchanged for over 200 million years. These ancient behemoths can live over 100 years and grow to immense sizes.",
+        10: "The Mythical Koi represents perseverance in Eastern mythology. It's said that a koi that climbs the waterfall of Dragon Gate will transform into a mighty dragon.",
+        11: "Kyogre is a legendary creature said to have expanded the seas. Ancient carvings depict it commanding storms and tsunamis with a mere thought.",
+        12: "Manaphy is called the 'Prince of the Sea' in old maritime tales. Sailors claim its presence brings calm waters and favorable winds to troubled voyages.",
+        13: "The Golden Magikarp appears useless at first glance, but old fishermen whisper that with enough patience, it holds the potential for incredible transformation."
+    };
+      const description = fishDescriptions[selectedFish.typeId] || "A mysterious fish about which little is known.";
+    
+    
+    // Draw description text with word wrapping
+    ctx.fillStyle = '#333333';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    
+    const maxWidth = panelWidth - 60;
+    const words = description.split(' ');
+    let line = '';
+    let y = rulerY + 90;
+    
+    for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && n > 0) {
+            ctx.fillText(line, panelX + 30, y);
+            line = words[n] + ' ';
+            y += 25;
+        }
+        else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line, panelX + 30, y);
 }
 // Variables for scroll handling
 let inventoryScrollOffset = 0;

@@ -182,7 +182,7 @@ const fishTypes = [
         minSize: 20,
         maxSize: 45,
         rarity: "Common",
-        chance: 0.25 // 25% chance
+        chance: 0.001 // 25% chance
     },
     {
         id: 2,
@@ -246,7 +246,7 @@ const fishTypes = [
         minSize: 60,
         maxSize: 120,
         rarity: "Epic",
-        chance: 0.005 // 0.4% chance
+        chance: 0.004 // 0.4% chance
     },
     {
         id: 10,
@@ -271,6 +271,14 @@ const fishTypes = [
         maxSize: 30,
         rarity: "Mythical",
         chance: 0.002 // 0.2% chance
+    },
+     {
+        id: 13,
+        name: "Golden Magikarp",
+        minSize: 50,
+        maxSize: 90,
+        rarity: "Mythical",
+        chance: 0.25 // 0.1% chance
     }
     
 ];
