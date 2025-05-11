@@ -1394,31 +1394,9 @@ socket.on('catch_fish', () => {
         const player = players[socket.id];
         
         // Check if player is near water (simple implementation)
-        let nearWater = false;
-        const playerCenter = {
-            x: player.x + 25, // Half of PLAYER_SIZE
-            y: player.y + 25
-        };
-        
-        for (const pond of gameObjects.ponds) {
-            // Check if player is in ellipse of pond
-            const dx = (playerCenter.x - (pond.x + pond.width/2)) / (pond.width/2);
-            const dy = (playerCenter.y - (pond.y + pond.height/2)) / (pond.height/2);
-            
-            if (dx*dx + dy*dy <= 1) {
-                nearWater = true;
-                break;
-            }
-        }
-        // if (player.bait <= 0) {
-        //     socket.emit('chat_message', {
-        //         username: 'System',
-        //         message: 'You need bait to fish! Find bait packs around the map.'
-        //     });
-        //     return;
-        // }
-        if (nearWater) {
-            // Determine which fish is caught based on rarity chances
+       
+    
+        // Determine which fish is caught based on rarity chances
             const caughtFish = determineCaughtFish();
             
             // Store fish in database
@@ -1440,13 +1418,7 @@ socket.on('catch_fish', () => {
                     message: `${player.username} caught a ${caughtFish.rarity} ${caughtFish.name} (${caughtFish.size.toFixed(1)} cm)!`
                 });
             });
-        } else {
-            // Player not near water - this is a cheat attempt or client/server desync
-            // socket.emit('chat_message', {
-            //     username: 'System',
-            //     message: 'You need to be at a pond to fish!'
-            // });
-        }
+        
     }
 });
 
