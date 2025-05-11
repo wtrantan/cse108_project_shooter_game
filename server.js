@@ -212,7 +212,7 @@ const BULLET_DAMAGE = 10;
 const BULLET_LIFETIME = 5000; // 5 seconds max bullet lifetime
 const MAX_AMMO = 10; // Maximum ammo capacity
 const AMMO_PACK_SIZE = 5 // Amount of ammo in each pack
-
+const MAX_BAIT = 10; // Maximum bait capacity
 //sprite collision size
 const COIN_SIZE = 20;
 const AMMO_SIZE = 70;
@@ -1692,83 +1692,113 @@ socket.on('shoot_bullet', (bulletData) => {
 });
 socket.on('collect_bait', (baitPackId) => {
     if (players[socket.id]) {
+        // Check if player is already at max capacity
+        if (players[socket.id].bait >= MAX_BAIT) {
+            // Reject the collection attempt
+            socket.emit('bait_update', { bait: players[socket.id].bait });
+            return;
+        }
+        
         const username = players[socket.id].username;
         
         // Find the bait pack
         const baitPackIndex = gameObjects.baitPacks.findIndex(bp => bp.id === baitPackId);
         
         if (baitPackIndex !== -1 && !gameObjects.baitPacks[baitPackIndex].collected) {
+            // Store the position of the collected bait pack for spawn logic
+            const collectedX = gameObjects.baitPacks[baitPackIndex].x;
+            const collectedY = gameObjects.baitPacks[baitPackIndex].y;
+            
             // Mark bait pack as collected
             gameObjects.baitPacks[baitPackIndex].collected = true;
             
             // Increase player bait
-            const BAIT_PACK_SIZE = 1; // Amount of bait in each pack
-            const MAX_BAIT = 10; // Maximum bait capacity
+            const BAIT_PACK_SIZE = 1;
             players[socket.id].bait = Math.min(players[socket.id].bait + BAIT_PACK_SIZE, MAX_BAIT);
             
             // Broadcast updated game state
             io.emit('game_state', { players, gameObjects });
-            
-            // Send notification
-            // io.emit('chat_message', {
-            //     username: 'System',
-            //     message: `${username} collected fishing bait! Bait: ${players[socket.id].bait}`
-            // });
-            
             
             // Send direct bait update to the client
             socket.emit('bait_update', { bait: players[socket.id].bait });
             
             // Generate a new bait pack after some time
             setTimeout(() => {
-            if (Object.keys(players).length > 0) {
-               
-                let position;
-                
-                // Try to place near a pond first
-                if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
-                    // Choose a random pond
-                    const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
+                if (Object.keys(players).length > 0) {
+                    let position;
+                    const MIN_SPAWN_DISTANCE = 200; // Minimum distance from previous spawn
                     
-                    // Try a few positions around the pond
+                    // Try multiple times to find a position far from previous one
                     for (let i = 0; i < 10; i++) {
-                        const angle = Math.random() * Math.PI * 2;
-                        const distance = Math.random() * 100 + 50; // 50-150 pixels from pond center
-                        
-                        const x = pond.x + pond.width/2 + Math.cos(angle) * distance;
-                        const y = pond.y + pond.height/2 + Math.sin(angle) * distance;
-                        
-                        // Keep within map bounds
-                        const boundedX = Math.max(0, Math.min(x, WORLD_WIDTH - BAIT_PACK_SIZE));
-                        const boundedY = Math.max(0, Math.min(y, WORLD_HEIGHT - BAIT_PACK_SIZE));
-                        
-                        if (isValidItemPosition(boundedX, boundedY, BAIT_PACK_SIZE, gameObjects)) {
-                            position = { x: boundedX, y: boundedY };
-                            break;
+                        // Try to place near a pond first 
+                        if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
+                            // Choose a random pond
+                            const pond = gameObjects.ponds[Math.floor(Math.random() * gameObjects.ponds.length)];
+                            
+                            // Try positions around the pond
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = Math.random() * 100 + 50;
+                            
+                            const testX = pond.x + pond.width/2 + Math.cos(angle) * distance;
+                            const testY = pond.y + pond.height/2 + Math.sin(angle) * distance;
+                            
+                            // Keep within map bounds
+                            const x = Math.max(0, Math.min(testX, WORLD_WIDTH - BAIT_PACK_SIZE));
+                            const y = Math.max(0, Math.min(testY, WORLD_HEIGHT - BAIT_PACK_SIZE));
+                            
+                            // Make sure it's valid and far enough from collected position
+                            if (isValidItemPosition(x, y, BAIT_PACK_SIZE, gameObjects)) {
+                                const distFromPrev = Math.sqrt(
+                                    Math.pow(x - collectedX, 2) + 
+                                    Math.pow(y - collectedY, 2)
+                                );
+                                
+                                if (distFromPrev >= MIN_SPAWN_DISTANCE) {
+                                    position = { x, y };
+                                    break;
+                                }
+                            }
                         }
                     }
+                    
+                    // If no suitable position found, get any valid position far from previous
+                    if (!position) {
+                        for (let i = 0; i < 15; i++) {
+                            const testPos = findValidItemPosition(BAIT_PACK_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
+                            
+                            // Check distance from collected position
+                            const distFromPrev = Math.sqrt(
+                                Math.pow(testPos.x - collectedX, 2) + 
+                                Math.pow(testPos.y - collectedY, 2)
+                            );
+                            
+                            if (distFromPrev >= MIN_SPAWN_DISTANCE) {
+                                position = testPos;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // If still no position, use any valid position as fallback
+                    if (!position) {
+                        position = findValidItemPosition(BAIT_PACK_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
+                    }
+                    
+                    const newBaitPack = {
+                        id: `bait-${Date.now()}`,
+                        x: position.x,
+                        y: position.y,
+                        collected: false
+                    };
+                    
+                    // Remove collected bait pack and add new one
+                    gameObjects.baitPacks = gameObjects.baitPacks.filter(b => !b.collected);
+                    gameObjects.baitPacks.push(newBaitPack);
+                    
+                    // Broadcast updated game objects
+                    io.emit('game_state', { players, gameObjects });
                 }
-                
-                // If we couldn't find a position near water, find any valid position
-                if (!position) {
-                    position = findValidItemPosition(BAIT_PACK_SIZE, WORLD_WIDTH, WORLD_HEIGHT, gameObjects);
-                }
-                
-                const newBaitPack = {
-                    id: `bait-${Date.now()}`,
-                    x: position.x,
-                    y: position.y,
-                    collected: false
-                };
-                
-                // Remove collected bait pack and add new one
-                gameObjects.baitPacks = gameObjects.baitPacks.filter(b => !b.collected);
-                gameObjects.baitPacks.push(newBaitPack);
-                
-                // Broadcast updated game objects
-                io.emit('game_state', { players, gameObjects });
-            }
-        }, 15000);  // Generate new bait pack after 15 seconds
+            }, 15000);  // Generate new bait pack after 15 seconds
         }
     }
 });

@@ -387,9 +387,10 @@
     </div>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #FFC107; margin-bottom: 5px;">Fishing</h3>
-        <p>Stand in a pond and press <b>F</b> to start fishing</p>
-        <p>When the bobber dips underwater, <b>click</b> to hook the fish.</p>
-        <p>Then, <b>click</b> again when the indicator is in the green zone to catch it</p>
+        <p>Collect Bait to start fishing</p>
+        <p>Stand in a pond and press <b>F</b> to throw your fishing rod</p>
+        <p>When the bobber dips underwater, <b>Click</b> to hook the fish.</p>
+        <p>Then, <b>Click</b> again when the indicator is in the green zone to catch it</p>
     </div>
     <div style="margin-bottom: 15px;">
         <h3 style="color: #9C27B0; margin-bottom: 5px;">Inventory</h3>
@@ -484,7 +485,8 @@
     'splash.mp3': 0,
     'trashcan.mp3': 0
 };
-
+const playerSpriteSheet = new Image();
+playerSpriteSheet.src = '/penguin-player.png'; // Create this image with your 20 frames
 
 // Get the settings button and menu elements
 const settingsToggleButton = document.getElementById('settingsToggleButton');
@@ -867,6 +869,7 @@ for (let i = 1; i <= 16; i++) {
             // Set canvas size to window size
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
+              addInstructionsButton();
              // Add unstuck button to the game UI
     const unstuckButton = document.createElement('button');
     unstuckButton.textContent = '🔄 Unstuck';
@@ -1894,16 +1897,20 @@ function drawBaitPacks() {
         }
     });
 }
-// 9. Add bait pack collection function
+//bait pack collection function
 function checkBaitPackCollection(player) {
     // Define player hitbox with larger interaction area
+if (currentBait >= MAX_BAIT) {
+        
+        return;
+    }
+
     const playerHitbox = {
         x: player.x + 5,            // Reduced padding from 10 to 5
         y: player.y + 5,            // Reduced padding from 10 to 5
         width: PLAYER_SIZE - 10,    // Increased from PLAYER_SIZE - 20
         height: PLAYER_SIZE - 10    // Increased from PLAYER_SIZE - 20
     };
-    
     // Check collision with each bait pack
     gameObjects.baitPacks.forEach(baitPack => {
         if (!baitPack.collected && !baitPack.visuallyCollected) {
@@ -2034,7 +2041,7 @@ function drawPixelatedSnow() {
     }
     
     // Add occasional snow drifts/bumps for texture
-    drawSnowDrifts(startX, startY, endX, endY, pixelSize);
+ // drawSnowDrifts(startX, startY, endX, endY, pixelSize);
 }
 
 // Function to add occasional snow drifts for more texture
@@ -2228,7 +2235,7 @@ function drawDecorativeLakes() {
             drawDecorativeIceRipples(drawX, drawY, lake);
             
             // Animate ice effects
-            drawDecorativeIceAnimation(drawX, drawY, lake);
+          //  drawDecorativeIceAnimation(drawX, drawY, lake);
         }
     });
 }
@@ -2607,6 +2614,7 @@ function playHitConfirmSound() {
                     }
                 }
             });
+               updateLeaderboard();
         }
         function checkAmmoPackCollection(player) {
     // Define player hitbox
@@ -4760,7 +4768,7 @@ function setupGameMusic() {
         '/background-music.mp3',
         '/Hateno-Village.mp3',
         '/Kass.mp3',
-        '/Sidons-theme.mp3',
+        '/Sidons-Theme.mp3',
         '/House-Theme.mp3'
     ];
     
@@ -5031,6 +5039,47 @@ document.addEventListener('click', function enableAudio() {
     // Remove this listener after first click
     document.removeEventListener('click', enableAudio);
 }, { once: true });
+// Add this function to your game initialization (call it from initGame())
+function addInstructionsButton() {
+    const button = document.createElement('button');
+    button.id = 'instructionsButton';
+    button.textContent = 'Help';
+    button.style.position = 'absolute';
+    button.style.bottom = '220px'; 
+    button.style.right = '10px';
+    button.style.backgroundColor = '#4CAF50';
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.padding = '8px 15px';
+    button.style.cursor = 'pointer';
+    button.style.zIndex = '1000';
+    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    
+    button.addEventListener('click', toggleInstructions);
+    
+    document.getElementById('gameContainer').appendChild(button);
+}
+
+// Add this function to toggle instructions visibility
+function toggleInstructions() {
+    const instructionsCard = document.getElementById('instructionsCard');
+    
+    if (instructionsCard.style.display === 'none') {
+        // Show instructions
+        instructionsCard.style.display = 'block';
+        instructionsCard.style.opacity = '0';
+        
+        // Animate fade-in
+        setTimeout(() => {
+            instructionsCard.style.opacity = '1';
+            instructionsCard.style.transition = 'opacity 0.3s ease';
+        }, 10);
+    } else {
+        // Hide instructions
+        hideInstructions();
+    }
+}
     </script>
      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 12px; opacity: 0.5;">
         <a href="/admin" >Admin</a>
