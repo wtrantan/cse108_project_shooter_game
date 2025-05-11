@@ -486,7 +486,7 @@
     'trashcan.mp3': 0
 };
 const playerSpriteSheet = new Image();
-playerSpriteSheet.src = '/penguin-player.png'; // Create this image with your 20 frames
+playerSpriteSheet.src = '/penguin_player.png'; // Create this image with your 20 frames
 
 // Get the settings button and menu elements
 const settingsToggleButton = document.getElementById('settingsToggleButton');
@@ -497,6 +497,7 @@ const changePasswordModal = document.getElementById('change-password-modal');
 const changeUsernameModal = document.getElementById('change-username-modal');
 const savePasswordBtn = document.getElementById('save-password-btn');
 const saveUsernameBtn = document.getElementById('save-username-btn');
+
 const closePasswordModal = document.querySelectorAll('#change-password-modal .close');
 const closeUsernameModal = document.querySelectorAll('#change-username-modal .close');
 
@@ -1091,7 +1092,13 @@ window.addEventListener('keydown', (e) => {
         };
     }
                 players = gameState.players;
-                
+    for (const id in players) {
+    // Initialize animation properties if they don't exist
+        if (!players[id].direction) players[id].direction = 'down';
+        if (players[id].isMoving === undefined) players[id].isMoving = false;
+        if (players[id].animFrame === undefined) players[id].animFrame = 0;
+        if (players[id].animTimer === undefined) players[id].animTimer = 0;
+    }
 
                 if (prevPosition && myId && players[myId]) {
         const serverPos = players[myId];
@@ -2153,7 +2160,26 @@ function drawPixelatedGrass() {
         }
     }
 }
-
+function getAnimationFrame(player) {
+    // Base frames for each direction
+    const frameMap = {
+        'right': { idle: 0, walkStart: 1 },
+        'left': { idle: 5, walkStart: 6 },
+        'down': { idle: 10, walkStart: 11 },
+        'up': { idle: 15, walkStart: 16 }
+    };
+    
+    const dir = player.direction || 'down';
+    
+    // Use idle frame if not moving
+    if (!player.isMoving) {
+        return frameMap[dir].idle;
+    }
+    
+    // Otherwise use walk animation (cycles through 4 frames)
+    const baseFrame = frameMap[dir].walkStart;
+    return baseFrame + (player.animFrame % 4);
+}
 function checkBulletObstacleCollision(bullet) {
     // Check rocks
     for (const rock of gameObjects.rocks) {
@@ -2798,7 +2824,55 @@ function playCoinSound() {
           
             
             // Draw coins
-           
+           for (const id in players) {
+    const player = players[id];
+    
+    // For our own player, determine movement state from keys
+    if (id === myId) {
+        // Check if moving
+        player.isMoving = keys.up || keys.down || keys.left || keys.right;
+        
+        // Update direction based on last pressed key
+        if (keys.right) player.direction = 'right';
+        else if (keys.left) player.direction = 'left';
+        else if (keys.down) player.direction = 'down';
+        else if (keys.up) player.direction = 'up';
+    } else {
+        // For other players, check if they're moving by comparing positions
+        if (player.prevX !== undefined && player.prevY !== undefined) {
+            player.isMoving = 
+                Math.abs(player.x - player.prevX) > 0.1 || 
+                Math.abs(player.y - player.prevY) > 0.1;
+                
+            // Update direction based on movement
+            if (Math.abs(player.x - player.prevX) > Math.abs(player.y - player.prevY)) {
+                player.direction = player.x > player.prevX ? 'right' : 'left';
+            } else if (Math.abs(player.y - player.prevY) > 0.1) {
+                player.direction = player.y > player.prevY ? 'down' : 'up';
+            }
+        }
+        
+        // Update previous position
+        player.prevX = player.x;
+        player.prevY = player.y;
+    }
+    
+    // Update animation frame counter
+    if (player.isMoving) {
+        player.animTimer = player.animTimer || 0;
+        player.animTimer++;
+        // Change animation frame every 8 game loops
+        if (player.animTimer >= 8) {
+            player.animFrame = player.animFrame || 0;
+            player.animFrame = (player.animFrame + 1) % 4; // 4 frames per direction
+            player.animTimer = 0;
+        }
+    } else {
+        // Reset animation when idle
+        player.animFrame = 0;
+        player.animTimer = 0;
+    }
+}
             drawPlayers();
             drawGameObjects(gameObjects.trees, treeSprite, 'green');
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
@@ -3249,7 +3323,7 @@ function createSnowflakeAtCamera() {
             });
         }
         
-        function drawPlayers() {
+     function drawPlayers() {
     for (const id in players) {
         const player = players[id];
         const drawX = player.x - cameraX;
@@ -3262,31 +3336,44 @@ function createSnowflakeAtCamera() {
             drawY + PLAYER_SIZE >= 0 &&
             drawY <= canvas.height
         ) {
-            // First draw colored square (for customized color)
-            ctx.fillStyle = player.color || '#FF0000';
-            ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+            // Get the correct animation frame
+            const frameIndex = getAnimationFrame(player);
             
-            // Then draw player sprite with transparency
+            // Calculate source rectangle from sprite sheet
+            // For a horizontal sprite sheet with 20 equal-sized frames
+            const frameWidth = playerSpriteSheet.width / 20; // Width of one frame
+            const sourceX = frameIndex * frameWidth;
+            
+            // Draw player's colored square as base (for customization)
+            // ctx.fillStyle = player.color || '#FF0000';
+            // ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+            
+            const visualScale = 2.25; //change scale
+            const sizeIncrease = PLAYER_SIZE * (visualScale - 1);
+            // Draw character sprite with animation
             try {
-                ctx.globalAlpha = 0.7; // Make sprite semi-transparent
-                ctx.drawImage(playerSprite, drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
-                ctx.globalAlpha = 1.0; // Reset alpha
+                ctx.drawImage(
+                    playerSpriteSheet,
+                    sourceX, 0,             // Source position (x, y)
+                    frameWidth, playerSpriteSheet.height, // Source dimensions
+                    drawX - sizeIncrease/2, // Center the larger sprite
+                    drawY - sizeIncrease/2, // Center the larger sprite
+                    PLAYER_SIZE * visualScale, // Wider
+                    PLAYER_SIZE * visualScale  // Taller
+                );
             } catch (e) {
-                // If sprite fails, we already have the colored square
+                // Fallback already handled with colored square
+                console.error("Error drawing player sprite:", e);
             }
             
-            // Draw player name with improved visibility
+            // Draw player name and score
             ctx.font = 'bold 14px Arial';
             ctx.textAlign = 'center';
+            ctx.fillStyle = '#000000';
+            ctx.fillText(player.username, drawX + PLAYER_SIZE / 2, drawY - 10);
             
-            // Use a dark color that stands out against snow (no shadow)
-            ctx.fillStyle = '#000000'; // Black text
-            ctx.fillText(player.username, drawX + PLAYER_SIZE / 2, drawY - 5);
-            
-            // Draw player score
             if (player.score !== undefined) {
-                ctx.fillStyle = '#000000'; // Same black color
-                ctx.fillText(`${player.score} pts`, drawX + PLAYER_SIZE / 2, drawY - 25);
+                ctx.fillText(`${player.score} pts`, drawX + PLAYER_SIZE / 2, drawY - 30);
             }
         }
     }
