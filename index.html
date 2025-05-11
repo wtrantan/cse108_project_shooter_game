@@ -2699,44 +2699,54 @@ function playCoinSound() {
     let moved = false;
     
 
-    // Save original position for rollback if needed
+      // Save original position for rollback if needed
     const originalX = player.x;
     const originalY = player.y;
     
-    // Calculate movement based on active keys with improved delta time
+    // Define a fixed pixels-per-second speed that is consistent across all devices
+    const CONSTANT_SPEED = 300; // pixels per second
+    
+    // Calculate elapsed time since last frame in seconds (not milliseconds)
     const now = performance.now();
-    const deltaTime = now - (lastUpdateTime || now);
-    const deltaFactor = deltaTime / 16.67; // Normalize to 60fps
+    const deltaTimeSeconds = (now - (lastUpdateTime || now)) / 1000;
     lastUpdateTime = now;
     
-    // Base speed adjusted by delta time for consistent speed regardless of frame rate
-    const adjustedSpeed = PLAYER_SPEED * Math.min(deltaFactor, 2.0); // Cap to prevent huge jumps
+    // Apply a strict cap to prevent huge jumps if the game freezes momentarily
+    const cappedDeltaTime = Math.min(deltaTimeSeconds, 0.1); // max 100ms
     
+    // Calculate distance to move this frame
+    const moveDistance = CONSTANT_SPEED * cappedDeltaTime;
+    
+    // Apply movement based on active keys
     if (keys.up) {
-        newY -= adjustedSpeed;
+        newY -= moveDistance;
         moved = true;
     }
     if (keys.down) {
-        newY += adjustedSpeed;
+        newY += moveDistance;
         moved = true;
     }
     if (keys.left) {
-        newX -= adjustedSpeed;
+        newX -= moveDistance;
         moved = true;
     }
     if (keys.right) {
-        newX += adjustedSpeed;
+        newX += moveDistance;
         moved = true;
     }
     
-    // If diagonal movement, normalize speed
+    // Apply diagonal normalization to prevent faster diagonal movement
     if ((keys.up || keys.down) && (keys.left || keys.right)) {
         const diagonalFactor = 0.7071; // 1/sqrt(2)
-        if (keys.up) newY = player.y - adjustedSpeed * diagonalFactor;
-        if (keys.down) newY = player.y + adjustedSpeed * diagonalFactor;
-        if (keys.left) newX = player.x - adjustedSpeed * diagonalFactor;
-        if (keys.right) newX = player.x + adjustedSpeed * diagonalFactor;
+        
+        if (keys.up || keys.down) {
+            newY = player.y + (newY - player.y) * diagonalFactor;
+        }
+        if (keys.left || keys.right) {
+            newX = player.x + (newX - player.x) * diagonalFactor;
+        }
     }
+    
     
     // Keep player within world bounds
     if (newX < 0) newX = 0;
