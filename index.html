@@ -1012,12 +1012,23 @@ socket.on('fish_deleted', (data) => {
     if (data.success) {
         // Server confirmed deletion, show notification
         //addChatMessage('System', `${data.fishName} has been removed from your inventory.`);
-        
+          fishInventory = fishInventory.filter(fish => fish.id !== data.fishId);
         // Request updated inventory to ensure client and server are in sync
+          drawFishInventory();
         socket.emit('get_fish_inventory');
     } else {
         // Handle errors
         addChatMessage('System', 'Failed to remove fish: ' + (data.error || 'Unknown error'));
+          // Reset deletion state to allow further attempts
+        isDeletingFish = false;
+        
+        // Process next pending deletion if any
+        if (pendingDeletions.length > 0) {
+            setTimeout(() => {
+                const nextFishId = pendingDeletions.shift();
+                deleteFish(nextFishId);
+            }, 500);
+        }
     }
 });
     socket.on('ammo_update', (data) => {
@@ -3988,20 +3999,71 @@ window.addEventListener('keydown', (e) => {
     }
 });
 // 3. Add function to send delete request to server
+let isDeletingFish = false;
+let pendingDeletions = [];
+
 function deleteFish(fishId) {
+    // Prevent multiple rapid deletions
+    if (isDeletingFish) {
+        // Queue this deletion to process after current one completes
+        pendingDeletions.push(fishId);
+        return;
+    }
+    
+    isDeletingFish = true;
+    
+    // Play sound effect first
+    playSound('trashcan.mp3', 1);
+    
+    // Show visual feedback that deletion is in progress
+    showStatusMessage("Deleting fish...");
+    
     // Send delete request to server
     socket.emit('delete_fish', { fishId: fishId });
     
-    // Optimistically remove from local inventory (server will validate)
-    fishInventory = fishInventory.filter(fish => fish.id !== fishId);
-    
-    // Redraw inventory
-    drawFishInventory();
-    
-    // Play sound effect
-    playSound('trashcan.mp3', 1);
+    // Use a timeout to prevent UI from freezing
+    setTimeout(() => {
+        // Let the server confirmation handle the actual removal
+        // No optimistic deletion to avoid desync issues
+        
+        // Reset deletion state after a reasonable timeout
+        isDeletingFish = false;
+        
+        // Process any pending deletions
+        if (pendingDeletions.length > 0) {
+            const nextFishId = pendingDeletions.shift();
+            deleteFish(nextFishId);
+        }
+    }, 500);
 }
 
+// helper function
+function showStatusMessage(message) {
+    // Create or update a status message element
+    let statusElement = document.getElementById('statusMessage');
+    if (!statusElement) {
+        statusElement = document.createElement('div');
+        statusElement.id = 'statusMessage';
+        statusElement.style.position = 'absolute';
+        statusElement.style.bottom = '80px';
+        statusElement.style.left = '50%';
+        statusElement.style.transform = 'translateX(-50%)';
+        statusElement.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        statusElement.style.color = 'white';
+        statusElement.style.padding = '10px 20px';
+        statusElement.style.borderRadius = '5px';
+        statusElement.style.zIndex = '1000';
+        document.getElementById('gameContainer').appendChild(statusElement);
+    }
+    
+    statusElement.textContent = message;
+    statusElement.style.display = 'block';
+    
+    // Hide after 2 seconds
+    setTimeout(() => {
+        statusElement.style.display = 'none';
+    }, 2000);
+}
 // Helper functions for fish display
 function getFishColor(typeId) {
     const colors = [
