@@ -628,7 +628,7 @@ baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder
         const treeSprite = new Image();
 
         const fishSprites = {};
-for (let i = 1; i <= 13; i++) {
+for (let i = 1; i <= 16; i++) {
     fishSprites[`fish${i}`] = new Image();
     fishSprites[`fish${i}`].src = `/fish${i}.png`; // Create these images or use placeholders
 }
@@ -3564,7 +3564,7 @@ function drawFishInventory() {
         Math.max(...fishInventory.map(fish => fish.size)) : 0;
     
     ctx.fillText(`Total Caught: ${totalFish}`, panelX + 30, statsY);
-    ctx.fillText(`Unique Types: ${uniqueTypes}/13`, panelX + 30, statsY + 25);
+    ctx.fillText(`Unique Types: ${uniqueTypes}/16`, panelX + 30, statsY + 25);
     ctx.fillText(`Largest Fish: ${largestFish} cm`, panelX + panelWidth - 200, statsY);
     
  if (viewingFishDetails && selectedFish) {
@@ -3859,7 +3859,7 @@ function drawFishDetails() {
     // Draw size visualization (ruler)
     const rulerWidth = panelWidth - 60;
     const rulerY = detailStartY + 20;
-    const maxPossibleSize = 450; // Largest possible fish in the game
+    const maxPossibleSize = 1450; // Largest possible fish in the game
     const sizeRatio = selectedFish.size / maxPossibleSize;
     
     // Draw ruler background
@@ -3912,7 +3912,10 @@ function drawFishDetails() {
         10: "The Mythical Koi represents perseverance in Eastern mythology. It's said that a koi that climbs the waterfall of Dragon Gate will transform into a mighty dragon.",
         11: "Kyogre is a legendary creature said to have expanded the seas. Ancient carvings depict it commanding storms and tsunamis with a mere thought.",
         12: "Manaphy is called the 'Prince of the Sea' in old maritime tales. Sailors claim its presence brings calm waters and favorable winds to troubled voyages.",
-        13: "The Golden Magikarp appears useless at first glance, but old fishermen whisper that with enough patience, it holds the potential for incredible transformation."
+        13: "The Golden Magikarp appears useless at first glance, but old fishermen whisper that with enough patience, it holds the potential for incredible transformation.",
+        14: "The Shiny Gyarados is the stuff of nightmares—its crimson hue marks it as a rare mutation fueled by raw rage. Some believe it appears only in times of chaos.",
+        15: "Wailord, the colossal titan of the seas, is often mistaken for an island by passing ships. Its deep calls echo for miles, rumbling like underwater thunder.",
+        16: "Lapras is a gentle giant known to ferry travelers across treacherous waters. Tales speak of its intelligence and hauntingly beautiful songs echoing under moonlight."
     };
       const description = fishDescriptions[selectedFish.typeId] || "A mysterious fish about which little is known.";
     

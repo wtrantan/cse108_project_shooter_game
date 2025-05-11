@@ -176,111 +176,33 @@ const gameObjects = {
      decorativeLakes: [] // New purely cosmetic frozen lakes
 };
 const fishTypes = [
-    {
-        id: 1,
-        name: "Common Carp",
-        minSize: 20,
-        maxSize: 45,
-        rarity: "Common",
-        chance: 0.25 // 25% chance
-    },
-    {
-        id: 2,
-        name: "Sunfish",
-        minSize: 10,
-        maxSize: 20,
-        rarity: "Common",
-        chance: 0.20 // 20% chance
-    },
-    {
-        id: 3,
-        name: "Catfish",
-        minSize: 25,
-        maxSize: 60,
-        rarity: "Uncommon",
-        chance: 0.15 // 15% chance
-    },
-    {
-        id: 4,
-        name: "Bass",
-        minSize: 20,
-        maxSize: 40,
-        rarity: "Uncommon",
-        chance: 0.15 // 15% chance
-    },
-    {
-        id: 5,
-        name: "Rainbow Trout",
-        minSize: 15,
-        maxSize: 35,
-        rarity: "Uncommon",
-        chance: 0.10 // 10% chance
-    },
-    {
-        id: 6,
-        name: "Pike",
-        minSize: 40,
-        maxSize: 80,
-        rarity: "Rare",
-        chance: 0.07 // 7% chance
-    },
-    {
-        id: 7,
-        name: "Salmon",
-        minSize: 30,
-        maxSize: 70,
-        rarity: "Rare",
-        chance: 0.05 // 5% chance
-    },
-    {
-        id: 8,
-        name: "Golden Perch",
-        minSize: 25,
-        maxSize: 50,
-        rarity: "Epic",
-        chance: 0.02 // 2% chance
-    },
-    {
-        id: 9,
-        name: "Sturgeon",
-        minSize: 60,
-        maxSize: 120,
-        rarity: "Epic",
-        chance: 0.004 // 0.4% chance
-    },
-    {
-        id: 10,
-        name: "Mythical Koi",
-        minSize: 50,
-        maxSize: 100,
-        rarity: "Legendary",
-        chance: 0.003 // 0.3% chance
-    }, 
-    {
-        id: 11,
-        name: "Kyogre",
-        minSize: 400,
-        maxSize: 450,
-        rarity: "Mythical",
-        chance: 0.001 // 0.1% chance
-    }, 
-    {
-        id: 12,
-        name: "Manaphy",
-        minSize: 25,
-        maxSize: 30,
-        rarity: "Mythical",
-        chance: 0.002 // 0.2% chance
-    },
-     {
-        id: 13,
-        name: "Golden Magikarp",
-        minSize: 50,
-        maxSize: 90,
-        rarity: "Mythical",
-        chance: 0.001 // 0.1% chance
-    }
-    
+    // Common: 39% / 2 = 19.5% each
+    { id: 1, name: "Common Carp", minSize: 20, maxSize: 45, rarity: "Common", chance: 0.195 },
+    { id: 2, name: "Sunfish", minSize: 10, maxSize: 20, rarity: "Common", chance: 0.195 },
+
+    // Uncommon: 29% / 3 ≈ 9.67% each
+    { id: 3, name: "Catfish", minSize: 25, maxSize: 60, rarity: "Uncommon", chance: 0.0967 },
+    { id: 4, name: "Bass", minSize: 20, maxSize: 40, rarity: "Uncommon", chance: 0.0967 },
+    { id: 5, name: "Rainbow Trout", minSize: 15, maxSize: 35, rarity: "Uncommon", chance: 0.0967 },
+
+    // Rare: 14% / 2 = 7% each
+    { id: 6, name: "Pike", minSize: 40, maxSize: 80, rarity: "Rare", chance: 0.07 },
+    { id: 7, name: "Salmon", minSize: 30, maxSize: 70, rarity: "Rare", chance: 0.07 },
+
+    // Epic: 8% / 2 = 4% each
+    { id: 8, name: "Golden Perch", minSize: 25, maxSize: 50, rarity: "Epic", chance: 0.04 },
+    { id: 9, name: "Sturgeon", minSize: 60, maxSize: 120, rarity: "Epic", chance: 0.04 },
+
+    // Legendary: 4%
+    { id: 10, name: "Mythical Koi", minSize: 50, maxSize: 100, rarity: "Legendary", chance: 0.04 },
+
+    // Mythical: 3.1% custom split
+    { id: 11, name: "Kyogre", minSize: 400, maxSize: 450, rarity: "Mythical", chance: 0.001 },
+    { id: 12, name: "Manaphy", minSize: 25, maxSize: 30, rarity: "Mythical", chance: 0.001 },
+    { id: 13, name: "Golden Magikarp", minSize: 50, maxSize: 90, rarity: "Mythical", chance: 0.005 },
+    { id: 14, name: "Shiny Gyarados", minSize: 500, maxSize: 700, rarity: "Mythical", chance: 0.005 },
+    { id: 15, name: "Wailord", minSize: 1450, maxSize: 2000, rarity: "Mythical", chance: 0.009 },
+    { id: 16, name: "Lapras", minSize: 150, maxSize: 300, rarity: "Mythical", chance: 0.009 }
 ];
 const WORLD_WIDTH = 4000;  // Make sure this matches your client-side value
 const WORLD_HEIGHT = 3000; // Make sure this matches your client-side value
