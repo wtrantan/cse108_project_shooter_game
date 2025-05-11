@@ -1298,14 +1298,28 @@ async function deleteAccount() {
         }
     });
             // Draw players
-            Object.values(players).forEach(player => {
-                minimapCtx.fillStyle = player.color || '#f00';
-                minimapCtx.fillRect(
-                    (player.x / WORLD_WIDTH) * minimapWidth,
-                    (player.y / WORLD_HEIGHT) * minimapHeight,
-                    4, 4
-                );
-            });
+             Object.values(players).forEach(player => {
+        // Find if this player has an active interpolation
+        const movingPlayer = positionBuffer.find(move => move.id === player.id);
+        let displayX = player.x;
+        let displayY = player.y;
+        
+        // If player is currently being interpolated, use the interpolated position
+        if (movingPlayer) {
+            // Calculate interpolated position using the same logic as in gameLoop
+            const progress = movingPlayer.progress;
+            const t = 1 - Math.pow(1 - progress, 2); // Same easing function
+            displayX = movingPlayer.fromX + (movingPlayer.toX - movingPlayer.fromX) * t;
+            displayY = movingPlayer.fromY + (movingPlayer.toY - movingPlayer.fromY) * t;
+        }
+        
+        minimapCtx.fillStyle = player.color || '#f00';
+        minimapCtx.fillRect(
+            (displayX / WORLD_WIDTH) * minimapWidth,
+            (displayY / WORLD_HEIGHT) * minimapHeight,
+            4, 4
+        );
+    });
             
             // Highlight current player
             if (myId && players[myId]) {
@@ -2626,12 +2640,12 @@ function playCoinSound() {
            
             drawPlayers();
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
-            
+             
              // Draw ammo packs
             drawAmmoPacks();
             if (isFishing) {
-        drawFishingProgress();
-    }
+                drawFishingProgress();
+            }
     drawBaitPacks();
     drawCoins();
     drawBullets();
@@ -2643,6 +2657,7 @@ function playCoinSound() {
     }
     
     updateBullets(16);
+     updateMinimap();
     const now = Date.now();
     const INTERPOLATION_DURATION = 100; // ms
     
