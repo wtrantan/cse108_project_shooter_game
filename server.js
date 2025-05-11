@@ -182,7 +182,7 @@ const fishTypes = [
         minSize: 20,
         maxSize: 45,
         rarity: "Common",
-        chance: 0.001 // 25% chance
+        chance: 0.25 // 25% chance
     },
     {
         id: 2,
@@ -278,7 +278,7 @@ const fishTypes = [
         minSize: 50,
         maxSize: 90,
         rarity: "Mythical",
-        chance: 0.25 // 0.1% chance
+        chance: 0.001 // 0.1% chance
     }
     
 ];
