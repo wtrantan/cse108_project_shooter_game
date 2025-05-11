@@ -1743,6 +1743,7 @@ socket.on('collect_bait', (baitPackId) => {
             //     message: `${username} collected fishing bait! Bait: ${players[socket.id].bait}`
             // });
             
+            
             // Send direct bait update to the client
             socket.emit('bait_update', { bait: players[socket.id].bait });
             

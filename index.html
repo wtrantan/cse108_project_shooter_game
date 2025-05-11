@@ -264,17 +264,43 @@
             background-color: #d32f2f;
         }
         #settingsToggleButton {
-            position: absolute;
-            top: 10 px;
-            right: 230px;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-            z-index: 101; /* Ensure it's above other elements */
-            color: #000;
-            cursor: pointer;
-        }
+    position: fixed; /* Changed from absolute to fixed for better positioning */
+    top: 10px; /* Fixed the invalid space between 10 and px */
+    right: 230px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    z-index: 1001; /* Increased z-index to be extra safe */
+    color: #000;
+    cursor: pointer;
+    display: block; /* Explicit display property for Firefox */
+    min-width: 70px; /* Ensure minimum width */
+    text-align: center; /* Center the text */
+    font-weight: bold; /* Make text more visible */
+    font-size: 14px; /* Ensure readable text size */
+    user-select: none; /* Prevent text selection when clicking */
+}
+
+/* Add media queries for responsive design at different zoom levels */
+@media screen and (max-width: 1200px) {
+    #settingsToggleButton {
+        right: 200px;
+    }
+}
+
+@media screen and (max-width: 900px) {
+    #settingsToggleButton {
+        right: 170px;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    #settingsToggleButton {
+        right: 120px;
+        top: 50px; /* Move down a bit on very small screens */
+    }
+}
         /* Basic modal styling (you can customize this) */
         .modal {
             display: none; /* Hidden by default */
@@ -450,7 +476,7 @@
         const soundEffectCooldowns = {
     'coin-sound.mp3': 0,
     'ammo-sound.mp3': 0,
-    'bait.mp3': 0,
+    'bait2.mp3': 0,
     'gun.mp3': 0,
     'catch.mp3': 0,
     'missedFish.mp3': 0,
@@ -1719,8 +1745,8 @@ function createBulletImpactEffect(x, y) {
 // Replace the current ground drawing code with this:
 
 function drawBaitPacks() {
-    gameObjects.baitPacks.forEach(baitPack => {
-        if (!baitPack.collected) {
+     gameObjects.baitPacks.forEach(baitPack => {
+        if (!baitPack.collected && !baitPack.visuallyCollected) {
             const drawX = baitPack.x - cameraX;
             const drawY = baitPack.y - cameraY;
             
@@ -1775,23 +1801,23 @@ function drawBaitPacks() {
 }
 // 9. Add bait pack collection function
 function checkBaitPackCollection(player) {
-    // Define player hitbox
+    // Define player hitbox with larger interaction area
     const playerHitbox = {
-        x: player.x + 10,
-        y: player.y + 10,
-        width: PLAYER_SIZE - 20,
-        height: PLAYER_SIZE - 20
+        x: player.x + 5,            // Reduced padding from 10 to 5
+        y: player.y + 5,            // Reduced padding from 10 to 5
+        width: PLAYER_SIZE - 10,    // Increased from PLAYER_SIZE - 20
+        height: PLAYER_SIZE - 10    // Increased from PLAYER_SIZE - 20
     };
     
     // Check collision with each bait pack
     gameObjects.baitPacks.forEach(baitPack => {
-        if (!baitPack.collected) {
-            // Define bait pack hitbox
+        if (!baitPack.collected && !baitPack.visuallyCollected) {
+            // Define bait pack hitbox with better interaction area
             const baitPackHitbox = {
-                x: baitPack.x + 5,
-                y: baitPack.y + 5,
-                width: BAIT_PACK_SIZE_DISPLAY - 10,
-                height: BAIT_PACK_SIZE_DISPLAY - 10
+                x: baitPack.x,                  // Removed +5 padding
+                y: baitPack.y,                  // Removed +5 padding
+                width: BAIT_PACK_SIZE_DISPLAY,  // Use full size
+                height: BAIT_PACK_SIZE_DISPLAY  // Use full size
             };
             
             // Check hitbox overlap
@@ -1801,6 +1827,12 @@ function checkBaitPackCollection(player) {
                 playerHitbox.y < baitPackHitbox.y + baitPackHitbox.height &&
                 playerHitbox.y + playerHitbox.height > baitPackHitbox.y
             ) {
+                // Mark as visually collected immediately
+                baitPack.visuallyCollected = true;
+                
+                // Create collection effect
+                createCollectionEffect(baitPack.x, baitPack.y);
+                
                 // Collect the bait pack (server will validate)
                 socket.emit('collect_bait', baitPack.id);
                 
@@ -1810,10 +1842,25 @@ function checkBaitPackCollection(player) {
         }
     });
 }
-
+function createCollectionEffect(x, y) {
+    // Create simple particle effect at collection point
+    for (let i = 0; i < 5; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2 + 1;
+        const size = Math.random() * 3 + 2;
+        
+        const particleX = x + BAIT_PACK_SIZE_DISPLAY/2 - cameraX;
+        const particleY = y + BAIT_PACK_SIZE_DISPLAY/2 - cameraY;
+        
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.arc(particleX, particleY, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
 // 10. Add bait collection sound
 function playBaitSound() {
-    playSound('bait.mp3', 0.3);
+    playSound('bait2.mp3', 0.3);
 }
 function drawPixelatedSnow() {
     // Use larger pixels for better performance
@@ -2645,11 +2692,12 @@ function playCoinSound() {
             drawPonds();
             //drawIce();
             // Draw trees
-            drawGameObjects(gameObjects.trees, treeSprite, 'green');
+          
             
             // Draw coins
            
             drawPlayers();
+            drawGameObjects(gameObjects.trees, treeSprite, 'green');
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
              
              // Draw ammo packs
@@ -3855,20 +3903,48 @@ function drawFishDetails() {
     
     // Show size with "ruler" visualization
     ctx.fillText(`Size: ${selectedFish.size} cm`, panelX + 30, detailStartY);
+    const fishSizeRanges = {
+        1: {name: "Common Carp", min: 20, max: 45},
+        2: {name: "Sunfish", min: 10, max: 20},
+        3: {name: "Catfish", min: 25, max: 60},
+        4: {name: "Bass", min: 20, max: 40},
+        5: {name: "Rainbow Trout", min: 15, max: 35},
+        6: {name: "Pike", min: 40, max: 80},
+        7: {name: "Salmon", min: 30, max: 70},
+        8: {name: "Golden Perch", min: 25, max: 50},
+        9: {name: "Sturgeon", min: 60, max: 120},
+        10: {name: "Mythical Koi", min: 50, max: 100},
+        11: {name: "Kyogre", min: 400, max: 450},
+        12: {name: "Manaphy", min: 25, max: 30},
+        13: {name: "Golden Magikarp", min: 50, max: 90},
+        14: {name: "Shiny Gyarados", min: 500, max: 700},
+        15: {name: "Wailord", min: 1450, max: 2000},
+        16: {name: "Lapras", min: 150, max: 300}
+    };
+    // Draw size visualization (ruler)
+    // Get size range for this fish type
+    const fishType = fishSizeRanges[selectedFish.typeId] || {min: 10, max: 100};
     
     // Draw size visualization (ruler)
     const rulerWidth = panelWidth - 60;
     const rulerY = detailStartY + 20;
-    const maxPossibleSize = 1450; // Largest possible fish in the game
-    const sizeRatio = selectedFish.size / maxPossibleSize;
+    
+    // Calculate the size range to show (min to max of this fish type)
+    const minPossibleSize = fishType.min;
+    const maxPossibleSize = fishType.max;
+    const sizeRange = maxPossibleSize - minPossibleSize;
+    
+    // Calculate how far along the ruler this fish's size is
+    const sizePosition = (selectedFish.size - minPossibleSize) / sizeRange;
+    const cappedSizePosition = Math.max(0, Math.min(1, sizePosition)); // Ensure between 0-1
     
     // Draw ruler background
     ctx.fillStyle = '#EEEEEE';
     ctx.fillRect(panelX + 30, rulerY, rulerWidth, 20);
     
     // Draw size indicator
-    ctx.fillStyle = getRarityColor(selectedFish.rarity);
-    ctx.fillRect(panelX + 30, rulerY, rulerWidth * sizeRatio, 20);
+     ctx.fillStyle = getRarityColor(selectedFish.rarity);
+    ctx.fillRect(panelX + 30, rulerY, rulerWidth * cappedSizePosition, 20);
     
     // Draw ruler markings
     ctx.strokeStyle = '#777777';
@@ -3885,9 +3961,19 @@ function drawFishDetails() {
     ctx.fillStyle = '#000000';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('0 cm', panelX + 30, rulerY + 35);
+   ctx.fillText(`${minPossibleSize} cm`, panelX + 30, rulerY + 35);
     ctx.fillText(`${Math.round(maxPossibleSize)} cm`, panelX + 30 + rulerWidth, rulerY + 35);
-    
+
+    //fail size context
+ ctx.fillStyle = '#555555';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    const sizePercentage = Math.round(cappedSizePosition * 100);
+    const sizeMessage = sizePercentage < 30 ? "Small specimen" : 
+                       sizePercentage < 70 ? "Average size" : 
+                       sizePercentage < 90 ? "Large specimen" : "Exceptional size!";
+    ctx.fillText(sizeMessage, panelX + panelWidth/2, rulerY + 35);
+
     // Draw catch date if available
     if (selectedFish.caughtAt) {
         const catchDate = new Date(selectedFish.caughtAt);
@@ -3895,7 +3981,7 @@ function drawFishDetails() {
         ctx.fillStyle = '#666666';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(`Caught on: ${formattedDate}`, panelX + panelWidth/2, rulerY + 60);
+        ctx.fillText(`Caught on: ${formattedDate}`, panelX + panelWidth/2, rulerY + 65);
     }
     
     // Add fish description based on type and rarity
@@ -3928,7 +4014,7 @@ function drawFishDetails() {
     const maxWidth = panelWidth - 60;
     const words = description.split(' ');
     let line = '';
-    let y = rulerY + 90;
+    let y = rulerY + 100;
     
     for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + ' ';
@@ -4421,13 +4507,21 @@ function playSound(soundFile, volume = 0.5) {
 }
 // Function to initialize music
 function setupGameMusic() {
-    console.log("Setting up game music...");
+    console.log("Setting up game music system with queue...");
     
-    // Create brand new audio element
-    const bgMusic = new Audio();
-    bgMusic.src = '/background-music.mp3'; // Path to your music file
-    bgMusic.loop = true;
-    bgMusic.volume = 0.3;
+    // Define music tracks (add your actual music file paths here)
+    const musicTracks = [
+        '/background-music.mp3',
+        '/Hateno-Village.mp3',
+        '/Kass.mp3',
+        '/Sidons-theme.mp3',
+        '/House-Theme.mp3'
+    ];
+    
+    // Track state
+    let currentTrackIndex = 0;
+    let isMusicPlaying = false;
+    let currentAudio = null;
     
     // Create UI control
     const musicControl = document.createElement('div');
@@ -4436,60 +4530,162 @@ function setupGameMusic() {
     musicControl.style.left = '0px';
     musicControl.style.zIndex = '1000';
     
+    // Add music toggle button
     const musicButton = document.createElement('button');
-    musicButton.textContent = '🎵 Music: ON';
+    musicButton.textContent = '🎵 Music: OFF';
     musicButton.style.padding = '5px 10px';
-    musicButton.style.backgroundColor = '#4CAF50';
+    musicButton.style.backgroundColor = '#777';
+    musicButton.style.color = 'white';
     musicButton.style.border = 'none';
     musicButton.style.borderRadius = '3px';
     musicButton.style.cursor = 'pointer';
     
-    let isMusicPlaying = false;
+    // Add track info display
+    const trackInfo = document.createElement('div');
+    trackInfo.style.fontSize = '10px';
+    trackInfo.style.color = 'white';
+    trackInfo.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    trackInfo.style.padding = '2px 5px';
+    trackInfo.style.borderRadius = '3px';
+    trackInfo.style.marginTop = '3px';
+    trackInfo.style.display = 'none';
     
-    // Toggle music state
-    musicButton.addEventListener('click', function() {
-        console.log("Music button clicked, current state:", isMusicPlaying);
-        isMusicPlaying = !isMusicPlaying;
+    // Function to play a specific track
+    function playTrack(index) {
+        // Stop current track if playing
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+        }
         
+        // Create new audio element
+        currentAudio = new Audio(musicTracks[index]);
+        currentAudio.volume = 0.3;
+        
+        // Set up event to play next track when this one ends
+        currentAudio.addEventListener('ended', playNextTrack);
+        
+        // Play the track
+        const playPromise = currentAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                console.log(`Now playing track ${index + 1}/${musicTracks.length}: ${getTrackName(musicTracks[index])}`);
+                updateTrackDisplay();
+            }).catch(e => {
+                console.error("Music playback failed:", e);
+                isMusicPlaying = false;
+                updateMusicButton();
+            });
+        }
+    }
+    
+    // Function to play next track in queue
+    function playNextTrack() {
+        if (!isMusicPlaying) return;
+        
+        // Move to next track, loop back to beginning if needed
+        currentTrackIndex = (currentTrackIndex + 1) % musicTracks.length;
+        playTrack(currentTrackIndex);
+    }
+    
+    // Function to play previous track
+    function playPrevTrack() {
+        if (!isMusicPlaying) return;
+        
+        // Move to previous track, loop to end if at beginning
+        currentTrackIndex = (currentTrackIndex - 1 + musicTracks.length) % musicTracks.length;
+        playTrack(currentTrackIndex);
+    }
+    
+    // Helper to get track name from path
+    function getTrackName(path) {
+        return path.split('/').pop().replace('.mp3', '').replace(/-/g, ' ');
+    }
+    
+    // Update music button appearance
+    function updateMusicButton() {
         if (isMusicPlaying) {
-            // Try to play music
-            const playPromise = bgMusic.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("Music started successfully");
-                    musicButton.textContent = '🎵 Music: ON';
-                    musicButton.style.backgroundColor = '#4CAF50';
-                }).catch(e => {
-                    console.error("Music play failed:", e);
-                    isMusicPlaying = false;
-                    musicButton.textContent = '🎵 Music: OFF';
-                    musicButton.style.backgroundColor = '#777';
-                });
-            }
+            musicButton.textContent = '🎵 Music: ON';
+            musicButton.style.backgroundColor = '#4CAF50';
+            trackInfo.style.display = 'block';
         } else {
-            // Pause music
-            bgMusic.pause();
             musicButton.textContent = '🎵 Music: OFF';
             musicButton.style.backgroundColor = '#777';
+            trackInfo.style.display = 'none';
+        }
+    }
+    
+    // Update track display
+    function updateTrackDisplay() {
+        if (currentAudio && isMusicPlaying) {
+            const trackName = getTrackName(musicTracks[currentTrackIndex]);
+            trackInfo.textContent = `♪ ${trackName} (${currentTrackIndex + 1}/${musicTracks.length})`;
+        }
+    }
+    
+    // Create navigation buttons
+    const controlsRow = document.createElement('div');
+    controlsRow.style.display = 'flex';
+    controlsRow.style.marginTop = '5px';
+    
+    // Previous track button
+    const prevButton = document.createElement('button');
+    prevButton.textContent = '⏮️';
+    prevButton.style.flex = '1';
+    prevButton.style.padding = '3px';
+    prevButton.style.backgroundColor = '#666';
+    prevButton.style.color = 'white';
+    prevButton.style.border = 'none';
+    prevButton.style.borderRadius = '3px 0 0 3px';
+    prevButton.style.cursor = 'pointer';
+    prevButton.addEventListener('click', function() {
+        if (isMusicPlaying) {
+            playPrevTrack();
         }
     });
     
-    // Add to DOM
-    musicControl.appendChild(musicButton);
-    document.getElementById('gameContainer').appendChild(musicControl);
-    
-    // Try initial auto-play (will likely be blocked, but try anyway)
-    bgMusic.play().then(() => {
-        isMusicPlaying = true;
-        console.log("Auto-play successful");
-    }).catch(e => {
-        console.log("Auto-play prevented (normal browser behavior):", e);
-        isMusicPlaying = false;
-        musicButton.textContent = '🎵 Music: OFF';
-        musicButton.style.backgroundColor = '#777';
+    // Next track button
+    const nextButton = document.createElement('button');
+    nextButton.textContent = '⏭️';
+    nextButton.style.flex = '1';
+    nextButton.style.padding = '3px';
+    nextButton.style.backgroundColor = '#666';
+    nextButton.style.color = 'white';
+    nextButton.style.border = 'none';
+    nextButton.style.borderRadius = '0 3px 3px 0';
+    nextButton.style.cursor = 'pointer';
+    nextButton.addEventListener('click', function() {
+        if (isMusicPlaying) {
+            playNextTrack();
+        }
     });
     
-    console.log("Music setup complete");
+    // Toggle music state
+    musicButton.addEventListener('click', function() {
+        isMusicPlaying = !isMusicPlaying;
+        
+        if (isMusicPlaying) {
+            playTrack(currentTrackIndex);
+        } else {
+            if (currentAudio) {
+                currentAudio.pause();
+            }
+        }
+        
+        updateMusicButton();
+    });
+    
+    // Add all elements to UI
+    controlsRow.appendChild(prevButton);
+    controlsRow.appendChild(nextButton);
+    
+    musicControl.appendChild(musicButton);
+    musicControl.appendChild(trackInfo);
+    musicControl.appendChild(controlsRow);
+    
+    document.getElementById('gameContainer').appendChild(musicControl);
+    
+    console.log("Music queue system setup complete");
 }
 
 // Set a timer to add music after game fully loads
