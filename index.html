@@ -1138,7 +1138,7 @@ socket.on('fish_deleted', (data) => {
         socket.emit('get_fish_inventory');
     } else {
         // Handle errors
-        addChatMessage('System', 'Failed to remove fish: ' + (data.error || 'Unknown error'));
+      //  addChatMessage('System', 'Failed to remove fish: ' + (data.error || 'Unknown error'));
           // Reset deletion state to allow further attempts
         isDeletingFish = false;
         
