@@ -8,10 +8,57 @@ const bcrypt = require('bcrypt');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 
+process.env.NODE_ENV = 'production';
+
+// Add a throttled version of the game state broadcast
+let fullStateUpdatePending = false;
+const FULL_STATE_UPDATE_INTERVAL = 3000; // 3 seconds
+
+function scheduleFullStateUpdate() {
+    if (fullStateUpdatePending) return;
+    
+    fullStateUpdatePending = true;
+    setTimeout(() => {
+        io.emit('full_game_state', { 
+            players,
+            gameObjects: getCompressedGameObjects(),
+            timestamp: Date.now()
+        });
+        fullStateUpdatePending = false;
+    }, FULL_STATE_UPDATE_INTERVAL);
+}
+
+// Compress game objects by removing unnecessary data
+function getCompressedGameObjects() {
+    return {
+        trees: gameObjects.trees,
+        rocks: gameObjects.rocks,
+        coins: gameObjects.coins.filter(c => !c.collected),
+        ammoPacks: gameObjects.ammoPacks.filter(a => !a.collected),
+        baitPacks: gameObjects.baitPacks.filter(b => !b.collected),
+        ponds: gameObjects.ponds,
+        decorativeLakes: gameObjects.decorativeLakes
+    };
+}
+
+// Call this after any major state change
+// For example, in collect_coin, collect_ammo, etc.
+scheduleFullStateUpdate();
+
 // Initialize app
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+  pingTimeout: 30000,
+  pingInterval: 5000,
+  upgradeTimeout: 30000,
+  maxHttpBufferSize: 10e6,
+  transports: ["websocket", "polling"],
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
@@ -212,16 +259,16 @@ const fishTypes = [
     {
         id: 11,
         name: "Kyogre",
-        minSize: 50,
-        maxSize: 100,
+        minSize: 400,
+        maxSize: 450,
         rarity: "Mythical",
         chance: 0.001 // 0.1% chance
     }, 
     {
         id: 12,
         name: "Manaphy",
-        minSize: 50,
-        maxSize: 100,
+        minSize: 25,
+        maxSize: 30,
         rarity: "Mythical",
         chance: 0.002 // 0.2% chance
     }
@@ -1329,6 +1376,11 @@ app.get('/admin', (req, res) => {
 });
 // Socket.IO connection handling
 io.on('connection', (socket) => {
+    if (socket.conn.transport.name !== 'websocket') {
+    socket.conn.on('upgrade', () => {
+      console.log('Client upgraded to WebSocket connection');
+    });
+  }
     console.log('A user connected:', socket.id);
     
     // Handle player login via socket (after REST authentication)
@@ -1940,37 +1992,43 @@ socket.on('collect_coin', (coinId) => {
     }
 });
     // Handle player movement
-    socket.on('move', (position) => {
+   socket.on('move', (position) => {
     if (players[socket.id]) {
-        // Keep player within world bounds
-        if (position.x < 0) position.x = 0;
-        if (position.y < 0) position.y = 0;
-        if (position.x > 4000 - 50) position.x = 4000 - 50; // Updated from 2000
-        if (position.y > 3000 - 50) position.y = 3000 - 50; // Updated from 1500
+        // Store client timestamp for better synchronization
+        const clientTimestamp = position.timestamp || Date.now();
         
-        // Get the input sequence number from client
-        const sequence = position.sequence;
+        // Keep player within world bounds
+        position.x = Math.max(0, Math.min(position.x, WORLD_WIDTH - 50));
+        position.y = Math.max(0, Math.min(position.y, WORLD_HEIGHT - 50));
         
         // Validate server-side that there's no collision
         if (!checkServerCollision(socket.id, position)) {
+            // Update player position
             players[socket.id].x = position.x;
             players[socket.id].y = position.y;
+            players[socket.id].lastUpdate = Date.now();
+            players[socket.id].lastClientTimestamp = clientTimestamp;
             
-            // Store the last processed sequence number
-            if (sequence !== undefined) {
-                players[socket.id].lastProcessedSequence = sequence;
+            // Use selective broadcasting - don't send full game state every time
+            // Only send to players who are close enough to care about this movement
+            const updatedPlayer = players[socket.id];
+            const nearbyPlayers = getNearbyPlayerSockets(socket.id, 1500); // 1500px radius
+            
+            if (nearbyPlayers.length > 0) {
+                io.to(nearbyPlayers).emit('player_move', {
+                    id: socket.id,
+                    x: updatedPlayer.x,
+                    y: updatedPlayer.y,
+                    timestamp: Date.now(),
+                    clientTimestamp: clientTimestamp
+                });
             }
-            
-            // Broadcast updated game state to all players
-            io.emit('game_state', { 
-                players, 
-                sequence: players[socket.id].lastProcessedSequence 
-            });
         } else {
-            // If collision detected, send the original position back to the client
-            socket.emit('game_state', { 
-                players,
-                sequence: players[socket.id].lastProcessedSequence 
+            // If collision detected, send correction to the client only
+            socket.emit('position_correction', {
+                x: players[socket.id].x,
+                y: players[socket.id].y,
+                timestamp: Date.now()
             });
         }
     }
@@ -2008,25 +2066,34 @@ socket.on('collect_coin', (coinId) => {
     
     // Handle disconnection
     socket.on('disconnect', () => {
-        if (players[socket.id]) {
-            const username = players[socket.id].username;
-            
-            // Remove player from active game
-            usernames.delete(username);
-            delete players[socket.id];
-            
-            // Broadcast updated game state
-            io.emit('game_state', { players });
-            
-            // Goodbye message
-            io.emit('chat_message', {
-                username: 'System',
-                message: `${username} has left the lobby.`
-            });
-            
-            console.log('User disconnected:', username);
-        }
-    });
+    if (players[socket.id]) {
+        const username = players[socket.id].username;
+        
+        // Save final score to database before removing the player
+        db.run(
+            'UPDATE users SET score = ? WHERE username = ?',
+            [players[socket.id].score, username]
+        );
+        
+        // Remove player from active game
+        usernames.delete(username);
+        delete players[socket.id];
+        
+        // Remove from pending updates if present
+        pendingScoreUpdates.delete(socket.id);
+        
+        // Broadcast updated game state
+        io.emit('game_state', { players });
+        
+        // Goodbye message
+        io.emit('chat_message', {
+            username: 'System',
+            message: `${username} has left the lobby.`
+        });
+        
+        console.log('User disconnected:', username);
+    }
+});
 });
 function determineCaughtFish() {
     // Calculate total chance for normalization
@@ -2281,21 +2348,16 @@ function isPositionColliding(x, y, playerSize) {
     
     return false; // No collision
 }
-
+const SCORE_UPDATE_INTERVAL = 10000; // Update database every 10 seconds
+const pendingScoreUpdates = new Set(); // Track which players need DB updates
 function handlePlayerHit(playerId, bullet) {
     const shooterId = bullet.playerId;
    
-    
     // Shooter gains points
     if (players[shooterId]) {
         players[shooterId].score += BULLET_DAMAGE;
-        
-        // Update shooter's score in database
-        const shooterUsername = players[shooterId].username;
-        db.run(
-            'UPDATE users SET score = ? WHERE username = ?',
-            [players[shooterId].score, shooterUsername]
-        );
+        // Mark for database update instead of immediate write
+        pendingScoreUpdates.add(shooterId);
     }
     
     // Hit player loses points
@@ -2303,13 +2365,8 @@ function handlePlayerHit(playerId, bullet) {
         // Prevent negative scores
         const newScore = Math.max(0, players[playerId].score - BULLET_DAMAGE);
         players[playerId].score = newScore;
-        
-        // Update hit player's score in database
-        const playerUsername = players[playerId].username;
-        db.run(
-            'UPDATE users SET score = ? WHERE username = ?',
-            [players[playerId].score, playerUsername]
-        );
+        // Mark for database update instead of immediate write
+        pendingScoreUpdates.add(playerId);
     }
     
     // Broadcast hit to all players
@@ -2319,15 +2376,14 @@ function handlePlayerHit(playerId, bullet) {
         damage: BULLET_DAMAGE
     });
     
-    // Broadcast updated game state with new scores
-    io.emit('game_state', { players, gameObjects });
+    // Optimize by only sending updated player information, not full game state
+    const updatedPlayers = {};
+    if (players[shooterId]) updatedPlayers[shooterId] = players[shooterId];
+    if (players[playerId]) updatedPlayers[playerId] = players[playerId];
     
-    // Optional: System message about hit
-    // io.emit('chat_message', {
-    //     username: 'System',
-    //     message: `${players[shooterId].username} hit ${players[playerId].username}! (+${BULLET_DAMAGE}/-${BULLET_DAMAGE} points)`
-    // });
+    io.emit('players_update', updatedPlayers);
 }
+
 function isValidItemPosition(x, y, size, gameObjects) {
     const itemHitbox = {
         x: x,
@@ -2401,7 +2457,29 @@ function isValidItemPosition(x, y, size, gameObjects) {
     
     return true; // Position is valid
 }
-
+function updatePendingScores() {
+    if (pendingScoreUpdates.size === 0) return;
+    
+    // Create a batch update
+    pendingScoreUpdates.forEach(playerId => {
+        if (players[playerId]) {
+            const username = players[playerId].username;
+            const score = players[playerId].score;
+            
+            db.run(
+                'UPDATE users SET score = ? WHERE username = ?',
+                [score, username],
+                (err) => {
+                    if (err) console.error(`Error updating score for ${username}:`, err);
+                }
+            );
+        }
+    });
+    
+    // Clear the pending updates after processing
+    pendingScoreUpdates.clear();
+}
+setInterval(updatePendingScores, SCORE_UPDATE_INTERVAL);
 // Add this function to find a valid position for items
 function findValidItemPosition(itemSize, worldWidth, worldHeight, gameObjects, maxAttempts = 30) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -2450,6 +2528,28 @@ function findValidItemPosition(itemSize, worldWidth, worldHeight, gameObjects, m
         x: Math.random() * (worldWidth - itemSize),
         y: Math.random() * (worldHeight - itemSize)
     };
+}
+function getNearbyPlayerSockets(playerId, radius) {
+    if (!players[playerId]) return [];
+    
+    const sourcePlayer = players[playerId];
+    const nearbyPlayerIds = [];
+    
+    for (const id in players) {
+        if (id === playerId) continue;
+        
+        const otherPlayer = players[id];
+        const distance = Math.sqrt(
+            Math.pow(sourcePlayer.x - otherPlayer.x, 2) +
+            Math.pow(sourcePlayer.y - otherPlayer.y, 2)
+        );
+        
+        if (distance <= radius) {
+            nearbyPlayerIds.push(id);
+        }
+    }
+    
+    return nearbyPlayerIds;
 }
 setInterval(updateServerBullets, 33); // ~30 updates per second
 // Start the server

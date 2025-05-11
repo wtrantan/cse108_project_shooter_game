@@ -457,6 +457,8 @@
     'splash.mp3': 0,
     'trashcan.mp3': 0
 };
+
+
 // Get the settings button and menu elements
 const settingsToggleButton = document.getElementById('settingsToggleButton');
         const settingsMenu = document.getElementById('settingsMenu');
@@ -595,12 +597,16 @@ let isMusicMuted = false;
     left: false,
     right: false
 };
+let lastLeaderboardUpdate = 0;
+const LEADERBOARD_UPDATE_INTERVAL = 250; // Only update every 250ms max
 const inputBuffer = [];
 const MAX_BUFFER_SIZE = 10;
+const positionBuffer = [];
 let lastInputTime = 0;
 const INPUT_SEND_INTERVAL = 50; // ms
 let lastMovementUpdate = 0;
 const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
+let lastUpdateTime = 0; 
     const BULLET_SPEED = 10;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
@@ -1022,59 +1028,73 @@ socket.on('fish_deleted', (data) => {
     currentBait = data.bait;
     updateBaitDisplay();
 });
-    socket.on('player_hit', (data) => {
-    const { playerId, damage, shooterId } = data;
+   // Modify the socket.on('player_hit') handler to update scores immediately
+socket.on('player_hit', (data) => {
+    const { playerId, shooterId, damage } = data;
     
-    // If this is the player being hit, show visual feedback
+    // If this is the player being hit
     if (playerId === myId) {
-        // Flash the screen red or play hurt animation
+        // Flash the screen red for feedback
         flashScreen('rgba(255,0,0,0.3)');
         
-        // Decrease score for the player being hit
-        if (players[playerId]) {
-            players[playerId].score -= damage;
-            
-            // Update local score if it's the current player
-            playerScore = players[playerId].score;
+        // Immediately update score on hit (prevent negative scores)
+        playerScore = Math.max(0, playerScore - damage);
+        scoreDisplay.textContent = `Score: ${playerScore}`;
+        
+        // Update the player's score in our local model
+        if (players[myId]) {
+            players[myId].score = playerScore;
+        }
+    }
+    
+    // If this is the player who shot
+    if (shooterId === myId) {
+        // Play hit confirmation sound
+        playHitConfirmSound();
+        
+        // Immediately update score for shooter
+        playerScore = playerScore + damage;
+        scoreDisplay.textContent = `Score: ${playerScore}`;
+        
+        // Update the player's score in our local model
+        if (players[myId]) {
+            players[myId].score = playerScore;
+        }
+    }
+    
+    // Also update scores in the players object for both shooter and hit player
+    // This ensures consistency with local score and leaderboard
+    if (players[playerId]) {
+        players[playerId].score = Math.max(0, players[playerId].score - damage);
+    }
+    
+    if (players[shooterId]) {
+        players[shooterId].score += damage;
+    }
+    
+    // Update the leaderboard with these new scores
+    updateLeaderboard();
+});
+
+// Add this to handle the players_update event more efficiently
+socket.on('players_update', (updatedPlayers) => {
+    // Update only the specific players that changed
+    for (const id in updatedPlayers) {
+        if (players[id]) {
+            players[id] = {...players[id], ...updatedPlayers[id]};
+        }
+    }
+    
+    // Update score display if current player was updated by server
+    // (this ensures client stays in sync with authoritative server)
+    if (myId && updatedPlayers[myId] && updatedPlayers[myId].score !== undefined) {
+        // Only update if server value differs from local value
+        if (playerScore !== updatedPlayers[myId].score) {
+            playerScore = updatedPlayers[myId].score;
             scoreDisplay.textContent = `Score: ${playerScore}`;
         }
     }
     
-    // If this is the player who shot, show hit confirmation
-    if (shooterId === myId) {
-        // Show hit marker or play hit sound
-        playHitConfirmSound();
-        
-        // Increase score for the shooter
-        if (players[shooterId]) {
-            players[shooterId].score += damage;
-            
-            // Update local score if it's the current player
-            if (shooterId === myId) {
-                playerScore = players[shooterId].score;
-                scoreDisplay.textContent = `Score: ${playerScore}`;
-            }
-        }
-    }
-    function enhanceInitGame() {
-    // Store the original initGame function
-    const originalInitGame = initGame;
-    
-    // Replace with enhanced version
-    window.initGame = function() {
-        // Call the original function
-        originalInitGame.apply(this, arguments);
-        
-        // Add our enhancements
-        checkShowInstructions();
-        addInstructionsButton();
-        
-       
-    };
-}
-
-// Execute the enhancement
-enhanceInitGame();
     // Update leaderboard
     updateLeaderboard();
 });
@@ -1403,14 +1423,29 @@ function processInputBuffer() {
     }
 }
 function updateLeaderboard() {
+    const now = Date.now();
+    
+    // Throttle updates to avoid flickering
+    if (now - lastLeaderboardUpdate < LEADERBOARD_UPDATE_INTERVAL) {
+        return;
+    }
+    
+    lastLeaderboardUpdate = now;
+    
     const leaderboardContent = document.getElementById('leaderboardContent');
     if (!leaderboardContent) return;
     
     // Clear existing content
     leaderboardContent.innerHTML = '';
     
-    // Get all players and sort by score
-    const playerList = Object.values(players).sort((a, b) => b.score - a.score);
+    // Get all players and ensure scores are valid numbers
+    const playerList = Object.values(players).map(player => {
+        // Ensure score is a valid number
+        if (typeof player.score !== 'number' || isNaN(player.score)) {
+            player = {...player, score: 0};
+        }
+        return player;
+    }).sort((a, b) => b.score - a.score);
     
     // Add each player to the leaderboard
     playerList.forEach((player, index) => {
@@ -1437,7 +1472,7 @@ function updateLeaderboard() {
         
         // Create score element
         const score = document.createElement('span');
-        score.textContent = player.score;
+        score.textContent = player.score || 0;  // Ensure we display 0 if undefined
         
         // Add elements to row
         playerRow.appendChild(colorIndicator);
@@ -2608,12 +2643,39 @@ function playCoinSound() {
     }
     
     updateBullets(16);
+    const now = Date.now();
+    const INTERPOLATION_DURATION = 100; // ms
     
+    // Process position buffer for smooth movement
+    for (let i = positionBuffer.length - 1; i >= 0; i--) {
+        const move = positionBuffer[i];
+        const elapsed = now - move.timestamp;
+        
+        if (elapsed >= INTERPOLATION_DURATION) {
+            // Apply final position and remove from buffer
+            if (players[move.id]) {
+                players[move.id].x = move.toX;
+                players[move.id].y = move.toY;
+            }
+            positionBuffer.splice(i, 1);
+        } else {
+            // Interpolate position
+            const progress = elapsed / INTERPOLATION_DURATION;
+            move.progress = progress;
+            
+            if (players[move.id]) {
+                // Ease-out function for smoother motion
+                const t = 1 - Math.pow(1 - progress, 2);
+                players[move.id].x = move.fromX + (move.toX - move.fromX) * t;
+                players[move.id].y = move.fromY + (move.toY - move.fromY) * t;
+            }
+        }
+    }
    
             // Continue the game loop
             requestAnimationFrame(gameLoop);
         }
-        function updatePlayerMovement() {
+       function updatePlayerMovement() {
     if (!myId || !players[myId]) return;
     
     const player = players[myId];
@@ -2621,31 +2683,44 @@ function playCoinSound() {
     let newY = player.y;
     let moved = false;
     
-    // Calculate movement based on active keys
+
+    // Save original position for rollback if needed
+    const originalX = player.x;
+    const originalY = player.y;
+    
+    // Calculate movement based on active keys with improved delta time
+    const now = performance.now();
+    const deltaTime = now - (lastUpdateTime || now);
+    const deltaFactor = deltaTime / 16.67; // Normalize to 60fps
+    lastUpdateTime = now;
+    
+    // Base speed adjusted by delta time for consistent speed regardless of frame rate
+    const adjustedSpeed = PLAYER_SPEED * Math.min(deltaFactor, 2.0); // Cap to prevent huge jumps
+    
     if (keys.up) {
-        newY -= PLAYER_SPEED;
+        newY -= adjustedSpeed;
         moved = true;
     }
     if (keys.down) {
-        newY += PLAYER_SPEED;
+        newY += adjustedSpeed;
         moved = true;
     }
     if (keys.left) {
-        newX -= PLAYER_SPEED;
+        newX -= adjustedSpeed;
         moved = true;
     }
     if (keys.right) {
-        newX += PLAYER_SPEED;
+        newX += adjustedSpeed;
         moved = true;
     }
     
     // If diagonal movement, normalize speed
     if ((keys.up || keys.down) && (keys.left || keys.right)) {
-        const diagonalSpeed = PLAYER_SPEED / Math.sqrt(2);
-        if (keys.up) newY = player.y - diagonalSpeed;
-        if (keys.down) newY = player.y + diagonalSpeed;
-        if (keys.left) newX = player.x - diagonalSpeed;
-        if (keys.right) newX = player.x + diagonalSpeed;
+        const diagonalFactor = 0.7071; // 1/sqrt(2)
+        if (keys.up) newY = player.y - adjustedSpeed * diagonalFactor;
+        if (keys.down) newY = player.y + adjustedSpeed * diagonalFactor;
+        if (keys.left) newX = player.x - adjustedSpeed * diagonalFactor;
+        if (keys.right) newX = player.x + adjustedSpeed * diagonalFactor;
     }
     
     // Keep player within world bounds
@@ -2660,19 +2735,25 @@ function playCoinSound() {
         players[myId].x = newX;
         players[myId].y = newY;
         
-        // Check for coin and ammo pack and bait collection
+        // Check for collectibles
         checkCoinCollection(player);
         checkAmmoPackCollection(player);
         checkBaitPackCollection(player);
-        // Send updated position to server
+        
+        // Send updated position to server with timestamp
         const now = Date.now();
         if (now - lastMovementUpdate >= MOVEMENT_UPDATE_INTERVAL) {
             lastMovementUpdate = now;
             socket.emit('move', {
                 x: newX,
-                y: newY
+                y: newY,
+                timestamp: now
             });
         }
+    } else if (moved) {
+        // If there's a collision, revert to last valid position
+        players[myId].x = originalX;
+        players[myId].y = originalY;
     }
 }
 function drawClouds() {
@@ -3743,6 +3824,77 @@ function setupSocketHandlers() {
             drawFishInventory();
         }
     });
+    
+// Handle individual player movements (more efficient than full game state)
+socket.on('player_move', (data) => {
+    if (data.id === myId) return; // Ignore updates about ourselves
+    
+    if (players[data.id]) {
+        // Add movement to buffer for interpolation
+        positionBuffer.push({
+            id: data.id,
+            fromX: players[data.id].x,
+            fromY: players[data.id].y,
+            toX: data.x,
+            toY: data.y,
+            timestamp: Date.now(),
+            progress: 0
+        });
+        
+        // Limit buffer size
+        if (positionBuffer.length > MAX_BUFFER_SIZE) {
+            positionBuffer.shift();
+        }
+        
+        // Immediately update the target position
+        players[data.id].targetX = data.x;
+        players[data.id].targetY = data.y;
+    }
+});
+
+// Handle position corrections from server
+socket.on('position_correction', (data) => {
+    if (!myId || !players[myId]) return;
+    
+    // Calculate server-client time difference
+    const serverTime = data.timestamp;
+    const clientTime = Date.now();
+    const latency = clientTime - serverTime;
+    
+    // Get distance from current position to corrected position
+    const dx = data.x - players[myId].x;
+    const dy = data.y - players[myId].y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    
+    // Only apply correction if significant and not during user input
+    if (distance > 50 && !isAnyKeyPressed()) {
+        // Smooth correction over time
+        const correctionStartTime = Date.now();
+        const correctionDuration = 200; // ms
+        
+        function applySmoothCorrection() {
+            const now = Date.now();
+            const elapsed = now - correctionStartTime;
+            const progress = Math.min(elapsed / correctionDuration, 1);
+            
+            // Ease-out function for smoother correction
+            const t = 1 - Math.pow(1 - progress, 3);
+            
+            // Apply partial correction
+            players[myId].x = players[myId].x + dx * t;
+            players[myId].y = players[myId].y + dy * t;
+            
+            if (progress < 1) {
+                requestAnimationFrame(applySmoothCorrection);
+            }
+        }
+        
+        applySmoothCorrection();
+    }
+});
+}
+function isAnyKeyPressed() {
+    return keys.up || keys.down || keys.left || keys.right;
 }
 // Update toggleFishInventory to initialize scroll position
 function toggleFishInventory() {
