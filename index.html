@@ -3499,14 +3499,14 @@ function createSnowflakeAtCamera() {
             const centerX = drawX + PLAYER_SIZE / 2;
             const centerY = drawY + PLAYER_SIZE / 2;
             
-            // Enhanced pulsing effect - larger variation and faster
-            const pulseTime = Date.now() * 0.005; // Increased speed
-            const pulseScale = 1 + Math.sin(pulseTime) * 0.15; // Increased amplitude (15%)
-            const glowSize = PLAYER_SIZE * 0.9 * pulseScale; // Larger base size with pulsing
+            // REDUCED: Smaller pulse and glow size
+            const pulseTime = Date.now() * 0.005;
+            const pulseScale = 1 + Math.sin(pulseTime) * 0.1; // Reduced from 0.15 to 0.1
+            const glowSize = PLAYER_SIZE * 0.7 * pulseScale; // Reduced from 0.9 to 0.6
             
             // Create a radial gradient for the glow
             const gradient = ctx.createRadialGradient(
-                centerX, centerY, glowSize * 0.1, // Smaller inner radius
+                centerX, centerY, glowSize * 0.1,
                 centerX, centerY, glowSize
             );
             
@@ -3515,9 +3515,8 @@ function createSnowflakeAtCamera() {
             const g = parseInt(color.slice(3, 5), 16);
             const b = parseInt(color.slice(5, 7), 16);
             
-            // More visible glow with higher opacity
-            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.6)`); // Increased from 0.4
-            gradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.3)`); // Increased from 0.2
+            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.5)`);
+            gradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.2)`);
             gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
             
             // Draw the glow
@@ -3526,12 +3525,12 @@ function createSnowflakeAtCamera() {
             ctx.arc(centerX, centerY, glowSize, 0, Math.PI * 2);
             ctx.fill();
             
-            // Add stronger glow with shadow for current player
+            // Add smaller glow for current player
             if (id === myId) {
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 20 * pulseScale; // Increased from 15
+                ctx.shadowBlur = 15 * pulseScale; // Reduced from 20
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, glowSize * 0.7, 0, Math.PI * 2); // Increased from 0.6
+                ctx.arc(centerX, centerY, glowSize * 0.6, 0, Math.PI * 2); // Reduced from 0.7
                 ctx.fill();
                 ctx.shadowBlur = 0; // Reset shadow for sprite drawing
             }
