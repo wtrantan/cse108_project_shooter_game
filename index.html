@@ -660,7 +660,7 @@ let lastMovementUpdate = 0;
 const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
 let lastUpdateTime = 0; 
 let modalInputFocused = false;
-    const BULLET_SPEED = 6;
+    const BULLET_SPEED = 0;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
     let lastShotTime = 0;
@@ -1150,14 +1150,42 @@ window.addEventListener('keydown', (e) => {
                  }
                     }
                 }
-                socket.on('bullets_update', (serverBullets) => {
-                // Add any new bullets from server that aren't in our local array
-                for (const serverBullet of serverBullets) {
-             if (!bullets.some(b => b.id === serverBullet.id)) {
-                   bullets.push(serverBullet);
+               socket.on('bullets_update', (serverBullets) => {
+    // First, identify bullets on client not on server
+    const serverBulletIds = new Set(serverBullets.map(b => b.id));
+    
+    // Only remove bullets server explicitly removed
+    bullets = bullets.filter(clientBullet => 
+        serverBulletIds.has(clientBullet.id) || 
+        clientBullet.hasHit || 
+        clientBullet.pendingRemoval ||
+        // Keep very recent bullets (within 100ms) even if server hasn't acknowledged them yet
+        (clientBullet.createdAt && Date.now() - clientBullet.createdAt < 100)
+    );
+    
+    // Then update/add bullets from server
+    for (const serverBullet of serverBullets) {
+        // Skip bullets we've marked as hit locally
+        const existingBullet = bullets.find(b => b.id === serverBullet.id);
+        
+        if (existingBullet) {
+            if (existingBullet.hasHit || existingBullet.pendingRemoval) {
+                continue;
             }
+            
+            // Only update position for interpolation, but movement will use local speed
+            existingBullet.x = serverBullet.x;
+            existingBullet.y = serverBullet.y;
+            existingBullet.serverManaged = true;
+        } else {
+            // Add new bullet if we don't already have it
+            bullets.push({
+                ...serverBullet,
+                hasHit: false,
+                pendingRemoval: false
+            });
         }
-   
+    }
 });
 socket.on('fish_deleted', (data) => {
     if (data.success) {
@@ -1669,39 +1697,34 @@ function shootBullet() {
     if (!myId || !players[myId] || chatInputFocused) return;
     
     if (currentAmmo <= 0) {
-        // Play empty gun sound or show message
         showAmmoWarning();
         return;
     }
-    // Check cooldown
+    
     const currentTime = Date.now();
     if (currentTime - lastShotTime < BULLET_COOLDOWN) return;
     lastShotTime = currentTime;
-    //Decrease ammo
+    
     currentAmmo--;
     updateAmmoDisplay();
     const player = players[myId];
     
-    // Calculate bullet starting position (center of player)
     const startX = player.x + PLAYER_SIZE / 2;
     const startY = player.y + PLAYER_SIZE / 2;
     
-    // Calculate direction vector from player to mouse, considering camera position
     const targetX = mouseX + cameraX;
     const targetY = mouseY + cameraY;
     
-    // Calculate direction vector
     let dirX = targetX - startX;
     let dirY = targetY - startY;
     
-    // Normalize the direction vector
     const length = Math.sqrt(dirX * dirX + dirY * dirY);
     if (length > 0) {
         dirX /= length;
         dirY /= length;
     }
     
-    // Create bullet object
+    // Create bullet object with hasHit property
     const bullet = {
         id: `bullet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         x: startX,
@@ -1709,17 +1732,14 @@ function shootBullet() {
         dirX: dirX,
         dirY: dirY,
         playerId: myId,
-        color: player.color
+        color: player.color,
+        hasHit: false, // Initialize as not hit
+        speed: BULLET_SPEED // Include the speed in the bullet object
     };
     
-    // Add to local bullets array
     bullets.push(bullet);
-    
-    // Send to server
-    socket.emit('shoot_bullet', bullet);
-     // Update server about ammo count
-     socket.emit('update_ammo', { ammo: currentAmmo });
-    // Play sound effect
+    socket.emit('shoot_bullet', bullet); // Send the speed to the server
+    socket.emit('update_ammo', { ammo: currentAmmo });
     playShootSound();
 }
 
@@ -1757,13 +1777,24 @@ function showAmmoWarning() {
 }
 // 5. Add bullet update and rendering functions
 function updateBullets(deltaTime) {
+    // Process removals first to prevent "zombie" bullets
+    const bulletsToRemove = new Set();
+ const dt = Math.min(deltaTime / 16.667, 2.0);
+    // First pass - identify bullets to remove
     for (let i = bullets.length - 1; i >= 0; i--) {
-        const bullet = bullets[i];
+       const bullet = bullets[i];
         
-        // Move bullet
-        bullet.x += bullet.dirX * BULLET_SPEED;
-        bullet.y += bullet.dirY * BULLET_SPEED;
+        // Skip already marked bullets
+        if (bullet.hasHit || bullet.pendingRemoval) {
+            bullets.splice(i, 1);
+            continue;
+        }
+       
+        // Move bullet using deltaTime for frame-rate independent movement
+          bullet.x += bullet.dirX * BULLET_SPEED * dt;
+        bullet.y += bullet.dirY * BULLET_SPEED * dt;
         
+        // Rest of collision detection code remains the same
         // Check if bullet is out of bounds
         if (
             bullet.x < 0 ||
@@ -1771,58 +1802,68 @@ function updateBullets(deltaTime) {
             bullet.y < 0 ||
             bullet.y > WORLD_HEIGHT
         ) {
-            // Remove bullet and notify server
+            bullet.pendingRemoval = true;
+            bulletsToRemove.add(bullet.id);
             socket.emit('bullet_removed', bullet.id);
-            bullets.splice(i, 1);
             continue;
         }
+        
         
         // Check collision with obstacles
-        if (checkBulletObstacleCollision(bullet)) {
-            // Add visual effect for collision
+        let hitObstacle = checkBulletObstacleCollision(bullet);
+        if (hitObstacle) {
+            // Mark immediately to prevent rendering this frame
+            bullet.hasHit = true;
+            bullet.pendingRemoval = true;
+            bulletsToRemove.add(bullet.id);
+            
+            // Create impact effect
             createBulletImpactEffect(bullet.x, bullet.y);
-            // Remove bullet and notify server
+            
+            // Notify server
             socket.emit('bullet_removed', bullet.id);
-            bullets.splice(i, 1);
             continue;
         }
         
-        // Check collision with other players (only for visual feedback)
+        // Check collision with other players
+        let hitPlayer = false;
         for (const playerId in players) {
-    // Don't collide with the shooter
-    if (playerId === bullet.playerId) continue;
-    
-    const player = players[playerId];
-    
-    // Use a more reliable collision detection algorithm
-    // Calculate distances between centers
-    const bulletCenterX = bullet.x;
-    const bulletCenterY = bullet.y;
-    const playerCenterX = player.x + PLAYER_SIZE/2;
-    const playerCenterY = player.y + PLAYER_SIZE/2;
-    
-    // Check if the bullet is inside the player's bounding box
-    if (
-        bulletCenterX >= player.x &&
-        bulletCenterX <= player.x + PLAYER_SIZE &&
-        bulletCenterY >= player.y &&
-        bulletCenterY <= player.y + PLAYER_SIZE
-    ) {
-        // Visual effect only
-        createHitEffect(bullet.x, bullet.y);
+            // Don't collide with the shooter
+            if (playerId === bullet.playerId) continue;
+            
+            const player = players[playerId];
+            
+            // Check if the bullet is inside the player's bounding box
+            if (
+                bullet.x >= player.x &&
+                bullet.x <= player.x + PLAYER_SIZE &&
+                bullet.y >= player.y &&
+                bullet.y <= player.y + PLAYER_SIZE
+            ) {
+                // Mark immediately to prevent visual glitches
+                bullet.hasHit = true;
+                bullet.pendingRemoval = true;
+                bulletsToRemove.add(bullet.id);
+                hitPlayer = true;
+                
+                // Create hit effect
+                createHitEffect(bullet.x, bullet.y);
+                
+                // Notify server only once
+                socket.emit('bullet_hit_player', {
+                    bulletId: bullet.id,
+                    playerId: playerId
+                });
+                
+                break;
+            }
+        }
         
-        // Notify server about the hit - this is the key change
-        socket.emit('bullet_hit_player', {
-            bulletId: bullet.id,
-            playerId: playerId
-        });
-        
-        // Remove bullet locally
-        bullets.splice(i, 1);
-        break;
+        if (hitPlayer) continue;
     }
-}
-    }
+    
+    // Second pass - remove bullets after all checks completed
+    bullets = bullets.filter(bullet => !bulletsToRemove.has(bullet.id));
 }
 function showBaitWarning() {
     const baitDisplay = document.getElementById('baitDisplay');
@@ -2520,7 +2561,14 @@ function drawWaterAnimation(drawX, drawY, pond) {
 }
 // 7. Add bullet drawing function
 function drawBullets() {
+    // Set better rendering quality for bullets
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    
     for (const bullet of bullets) {
+        // Skip any bullet that has been marked for removal
+        if (bullet.hasHit || bullet.pendingRemoval) continue;
+        
         const drawX = bullet.x - cameraX;
         const drawY = bullet.y - cameraY;
 
@@ -2531,24 +2579,33 @@ function drawBullets() {
             drawY + BULLET_SIZE >= 0 &&
             drawY <= canvas.height
         ) {
-            // Draw bullet with a black border
-            ctx.fillStyle = bullet.color || '#FF0000'; // Bullet color
+            // Draw bullet with enhanced visuals
+            ctx.fillStyle = bullet.color || '#FF0000';
+            
+            // Use save/restore for cleaner state management
+            ctx.save();
+            
+            // Draw main bullet
             ctx.beginPath();
             ctx.arc(drawX, drawY, BULLET_SIZE / 2, 0, Math.PI * 2);
             ctx.fill();
 
             // Add black border
-            ctx.strokeStyle = '#000000'; // Black border
-            ctx.lineWidth = 2; // Border thickness
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
             ctx.stroke();
 
-            // Optional: Draw trail/tail
+            // Add motion blur trail for better visual feedback of movement
             ctx.strokeStyle = bullet.color || '#FF0000';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.7;
             ctx.beginPath();
             ctx.moveTo(drawX, drawY);
-            ctx.lineTo(drawX - bullet.dirX * 10, drawY - bullet.dirY * 10);
+            ctx.lineTo(drawX - bullet.dirX * 12, drawY - bullet.dirY * 12);
             ctx.stroke();
+            
+            // Reset global alpha
+            ctx.restore();
         }
     }
 }
@@ -2962,11 +3019,13 @@ function playCoinSound() {
         drawFishInventory();
     }
     
-    updateBullets(16);
-     updateMinimap();
-    const now = Date.now();
-    const INTERPOLATION_DURATION = 100; // ms
     
+     updateMinimap();
+   const now = performance.now();
+    const deltaTime = now - (lastUpdateTime || now);
+    lastUpdateTime = now;
+    const INTERPOLATION_DURATION = 100; // ms
+    updateBullets(deltaTime);
     // Process position buffer for smooth movement
     for (let i = positionBuffer.length - 1; i >= 0; i--) {
         const move = positionBuffer[i];
