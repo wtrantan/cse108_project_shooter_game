@@ -2500,8 +2500,8 @@ function drawPondRipples(drawX, drawY, pond) {
     
     // Draw 3 elliptical ripples that grow and fade over time
     for (let i = 0; i < 3; i++) {
-        const offset = i * Math.PI * 0.6; // Offset each ripple
-        const size = ((time + offset) % 3) / 3; // 0 to 1 value for size
+        const offset = i * Math.PI * 0.6;
+        const size = ((time + offset) % 3) / 3;
         
         if (size > 0.1) { // Only draw visible ripples
             ctx.globalAlpha = 0.3 - size * 0.3; // Fade out as they grow
@@ -2517,7 +2517,7 @@ function drawPondRipples(drawX, drawY, pond) {
         }
     }
     
-    ctx.globalAlpha = 1.0; // Reset alpha
+    ctx.globalAlpha = 1.0;
 }
 
 // Animate water surface
@@ -2547,7 +2547,7 @@ function drawWaterAnimation(drawX, drawY, pond) {
         }
     }
 }
-// 7. Add bullet drawing function
+// Add bullet drawing function
 function drawBullets() {
     for (const bullet of bullets) {
         // Skip any bullet that has been marked for removal
@@ -2574,7 +2574,7 @@ function drawBullets() {
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Optional: Draw trail/tail
+            // Draw trail/tail
             ctx.strokeStyle = bullet.color || '#FF0000';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -2636,7 +2636,6 @@ function flashScreen(color) {
     const currentTime = Date.now();
     if (currentTime - lastFlashTime < FLASH_COOLDOWN) return;
     lastFlashTime = currentTime;
-    // Create overlay div
     
     const flash = document.createElement('div');
     flash.style.position = 'absolute';
@@ -2644,10 +2643,10 @@ function flashScreen(color) {
     flash.style.left = '0';
     flash.style.width = '100%';
     flash.style.height = '100%';
-    flash.style.boxShadow = 'inset 0 0 50px 20px ' + color; // Create an inset shadow instead of background
+    flash.style.boxShadow = 'inset 0 0 50px 20px ' + color;
     flash.style.pointerEvents = 'none';
     flash.style.zIndex = '1000';
-    flash.style.backgroundColor = 'transparent'; // No background color
+    flash.style.backgroundColor = 'transparent';
     
     // Add to game container
     gameContainer.appendChild(flash);
@@ -2732,7 +2731,7 @@ function playHitConfirmSound() {
                 playerHitbox.y < ammoPackHitbox.y + ammoPackHitbox.height &&
                 playerHitbox.y + playerHitbox.height > ammoPackHitbox.y
             ) {
-                // Collect the ammo pack (server will validate)
+                // Collect the ammo pack
                 socket.emit('collect_ammo', ammoPack.id);
                 
                 // Play ammo collection sound
@@ -2753,7 +2752,7 @@ function playAmmoSound() {
         height: PLAYER_SIZE - 30
     };
     
-    // Calculate player center coordinates - ADD THESE LINES
+    // Calculate player center coordinates
     const playerCenterX = newX + PLAYER_SIZE/2;
     const playerCenterY = newY + PLAYER_SIZE/2;
     // Check collision with trees
@@ -2762,7 +2761,7 @@ function playAmmoSound() {
         // Trees have a smaller collision box than visual size
         const treeHitbox = {
             x: tree.x + treeSize * 0.2,
-            y: tree.y + treeSize * 0.5, // Mostly bottom part (trunk)
+            y: tree.y + treeSize * 0.5,
             width: treeSize * 0.6,
             height: treeSize * 0.5
         };
@@ -2797,7 +2796,7 @@ function playAmmoSound() {
             return true; // Collision detected
         }
     }
-     // Check deep water collision (allow wading at edges but not deep water)
+     // Check deep water collision
     for (const pond of gameObjects.ponds) {
         // Calculate pond center and radiuses
         const pondCenterX = pond.x + pond.width/2;
@@ -2805,7 +2804,7 @@ function playAmmoSound() {
         const pondRadiusX = pond.width/2;
         const pondRadiusY = pond.height/2;
         
-        // Calculate normalized distance from center (elliptical equation)
+        // Calculate normalized distance from center
         // For a point (x,y) in an ellipse with center (h,k) and radii a,b:
         // ((x-h)/a)² + ((y-k)/b)² <= 1 means the point is inside the ellipse
         const dx = (playerCenterX - pondCenterX) / pondRadiusX;
@@ -2814,15 +2813,13 @@ function playAmmoSound() {
         
         // If player is deeper than 70% into the pond (from edge to center), block movement
         // This allows the player to wade in the shallow edges (30% from the edge)
-        if (distanceSquared < 0.7*0.7) {  // Using 0.7² to avoid square root calculation
-            return true; // Too deep in water
+        if (distanceSquared < 0.7*0.7) { 
+            return true;
         }
         
-        // Optional: Add movement penalty when in shallow water
-        // This would be handled elsewhere in movement code
     }
     
-    return false; // No collision
+    return false;
 }
 function playCoinSound() {
     playSound('coin-sound.mp3', 0.2);
@@ -2877,7 +2874,7 @@ function playCoinSound() {
             ctx.fillStyle = '#7CFC00';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Draw clouds (optional)
+            // Draw clouds
             //drawPixelatedGrass();
             drawPixelatedSnow();
            
@@ -2916,17 +2913,16 @@ function playCoinSound() {
                 const dx = Math.abs(player.x - player.prevX);
                 const dy = Math.abs(player.y - player.prevY);
                 
-                // Only update direction if there's significant movement
                 // This prevents rapid direction changes during small movements
                 const movementThreshold = 0.3;
                 
-                // Direction change hysteresis - require more movement to change direction
+                // Direction change hysteresis
                 const directionChangeThreshold = player.lastDirection === player.direction ? 1.2 : 1.0;
                 
                 if (dx > movementThreshold || dy > movementThreshold) {
                     // Determine primary movement direction with hysteresis
-                    // This prevents rapid switching between horizontal/vertical during diagonal movement
-                    let newDirection = player.direction; // Default to keeping current direction
+                    // This prevents rapid switching
+                    let newDirection = player.direction;
                     
                     if (dx > dy * directionChangeThreshold) {
                         // Horizontal movement dominates
@@ -2967,8 +2963,8 @@ function playCoinSound() {
     // Store last animation time to prevent rapid resets
     player.lastAnimTime = Date.now();
 } else {
-    // Only reset animation when definitely idle for a while (debounce)
-    // This prevents animation resetting during tiny pauses in network updates
+    // Only reset animation when definitely idle
+    // This prevents always animation resetting
     if (!player.lastAnimTime || (Date.now() - player.lastAnimTime > 500)) {
         player.animFrame = 0;
         player.animTimer = 0;
@@ -2997,7 +2993,7 @@ function playCoinSound() {
     updateBullets(16);
      updateMinimap();
     const now = Date.now();
-    const INTERPOLATION_DURATION = 100; // ms
+    const INTERPOLATION_DURATION = 100;
     
     // Process position buffer for smooth movement
     for (let i = positionBuffer.length - 1; i >= 0; i--) {
@@ -3017,7 +3013,6 @@ function playCoinSound() {
             move.progress = progress;
             
             if (players[move.id]) {
-                // Ease-out function for smoother motion
                 const t = 1 - Math.pow(1 - progress, 2);
                 players[move.id].x = move.fromX + (move.toX - move.fromX) * t;
                 players[move.id].y = move.fromY + (move.toY - move.fromY) * t;
@@ -3041,7 +3036,7 @@ function playCoinSound() {
     const originalY = player.y;
     
     // Define movement parameters
-    const CONSTANT_SPEED = 300; // pixels per second
+    const CONSTANT_SPEED = 300;
     
     // Calculate elapsed time since last frame in seconds
     const now = performance.now();
@@ -3049,7 +3044,7 @@ function playCoinSound() {
     lastUpdateTime = now;
     
     // Apply a strict cap to prevent huge jumps if the game freezes momentarily
-    const cappedDeltaTime = Math.min(deltaTimeSeconds, 0.1); // max 100ms
+    const cappedDeltaTime = Math.min(deltaTimeSeconds, 0.1);
     
     // Check if the player is on ice
     const onIce = isPlayerOnIce(player.x, player.y, PLAYER_SIZE);
@@ -3057,12 +3052,12 @@ function playCoinSound() {
     
     // Different physics parameters based on surfa1e
   const acceleration = onIce ? 0.1 : 1.0; // Slower acceleration on ice
-    const friction = onIce ? 0.98 : 0.1;   // Less friction (more slippery) on ice
+    const friction = onIce ? 0.98 : 0.1;   // Less friction on ice
     
     // Calculate base movement distance
     const moveDistance = CONSTANT_SPEED * cappedDeltaTime;
     
-    // Apply forces based on key presses (acceleration)
+    // Apply forces based on key presses
    if (keys.up) {
     player.momentum.y -= moveDistance * acceleration;
     moved = true;
@@ -3088,7 +3083,7 @@ if ((keys.up || keys.down) && (keys.left || keys.right)) {
     player.momentum.y *= diagonalFactor;
 }
     
-    // Apply momentum (this is what creates the sliding effect)
+    // Apply momentum
     newX += player.momentum.x;
     newY += player.momentum.y;
     
@@ -3107,18 +3102,18 @@ if ((keys.up || keys.down) && (keys.left || keys.right)) {
     }
     if (newY < 0) {
         newY = 0;
-        player.momentum.y = 0; // Stop momentum when hitting wall
+        player.momentum.y = 0;
     }
     if (newX > WORLD_WIDTH - PLAYER_SIZE) {
         newX = WORLD_WIDTH - PLAYER_SIZE;
-        player.momentum.x = 0; // Stop momentum when hitting wall
+        player.momentum.x = 0;
     }
     if (newY > WORLD_HEIGHT - PLAYER_SIZE) {
         newY = WORLD_HEIGHT - PLAYER_SIZE;
-        player.momentum.y = 0; // Stop momentum when hitting wall
+        player.momentum.y = 0;
     }
     
-    // Visual ice indicator (optional)
+    // Visual ice indicator
     if (onIce && (Math.abs(player.momentum.x) > 0.5 || Math.abs(player.momentum.y) > 0.5)) {
         // Create sliding effects/particles behind player
         createIceSlideEffect(player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2);
@@ -3126,7 +3121,6 @@ if ((keys.up || keys.down) && (keys.left || keys.right)) {
     
     // Check for collision with obstacles
     if ((moved || player.momentum.x !== 0 || player.momentum.y !== 0) && !checkCollision(player, newX, newY)) {
-        // Apply movement locally first (client-side prediction)
         players[myId].x = newX;
         players[myId].y = newY;
         
@@ -3157,7 +3151,7 @@ if ((keys.up || keys.down) && (keys.left || keys.right)) {
 }
 function createIceSlideEffect(x, y) {
     // Create ice particle effects
-    for (let i = 0; i < 2; i++) { // Keep particle count low for performance
+    for (let i = 0; i < 2; i++) { // Keep particle count low
         const particle = {
             x: x + (Math.random() * 10 - 5),
             y: y + (Math.random() * 10 - 5),
@@ -3168,7 +3162,6 @@ function createIceSlideEffect(x, y) {
         };
         
         
-        // If you have a particle system:
         if (!window.iceParticles) window.iceParticles = [];
         window.iceParticles.push(particle);
     }
@@ -3201,23 +3194,20 @@ function drawIceParticles() {
     ctx.globalAlpha = 1.0;
 }
 function drawClouds() {
-    // Winter cloud settings - using blue-gray tones
-    // Choose one of these color options:
-    
-    // Option 1: Light Gray Clouds
+    // Winter cloud settings    
+    // Light Gray Clouds
     // ctx.fillStyle = 'rgba(220, 220, 220, 0.8)';
     
-    // Option 2: Soft Blue-Gray Clouds (recommended for winter theme)
+    // Soft Blue-Gray Clouds (recommended for winter theme)
     ctx.fillStyle = 'rgba(210, 218, 230, 0.8)';
     
-    // Option 3: White with blue tint
+    // White with blue tint
     // ctx.fillStyle = 'rgba(240, 248, 255, 0.8)';
     
     // Use time to animate clouds
     const time = Date.now() * 0.0002;
     
     // Create fewer clouds with larger minimum size
-    // and make them move horizontally
     const cloudSpacingX = 1200;
     const cloudSpacingY = 800; 
     
@@ -3227,7 +3217,7 @@ function drawClouds() {
     const visibleTop = cameraY;
     const visibleBottom = cameraY + canvas.height;
     
-    // Generate clouds in the visible area (with buffer for smooth scrolling)
+    // Generate clouds in the visible area
     for (let baseY = Math.floor(visibleTop / cloudSpacingY) * cloudSpacingY - cloudSpacingY; 
          baseY <= visibleBottom + cloudSpacingY; 
          baseY += cloudSpacingY) {
@@ -3242,7 +3232,6 @@ function drawClouds() {
             let baseX = (i * cloudSpacingX) + (random * cloudSpacingX);
             
             // Apply horizontal movement based on time
-            // Different rows move at different speeds and directions
             const speedFactor = (baseY % 3 === 0) ? 1 : ((baseY % 3 === 1) ? -0.7 : 0.5);
             const movement = time * 100 * speedFactor;
             
@@ -3284,7 +3273,7 @@ function drawClouds() {
                 // Fill the entire shape
                 ctx.fill();
                 
-                // Optional: Add darker bottom to clouds to suggest snow
+                // Add darker bottom to clouds to suggest snow
                 ctx.fillStyle = 'rgba(190, 200, 220, 0.4)';
                 ctx.beginPath();
                 ctx.arc(drawX, drawY + cloudSize * 0.1, cloudSize * 0.45, 0, Math.PI);
@@ -3295,17 +3284,14 @@ function drawClouds() {
         }
     }
     
-    // Optional: Add occasional falling snowflakes
+    //Add occasional falling snowflakes
    // drawFallingSnow();
 }
 
-//a new function to create falling snow effect
-// Simple diagonal snow effect for top-down view
+//snow effect for top-down view
 function drawFallingSnow() {
-    // Create snow array once
     if (!window.snowflakes) {
         window.snowflakes = [];
-        // Create snowflakes around the camera view
         for (let i = 0; i < 300; i++) {
             window.snowflakes.push(createSnowflakeAtCamera());
         }
@@ -3317,32 +3303,29 @@ function drawFallingSnow() {
     for (let i = 0; i < window.snowflakes.length; i++) {
         const flake = window.snowflakes[i];
         
-        // Calculate screen position (relative to camera)
         const drawX = flake.x - cameraX;
         const drawY = flake.y - cameraY;
         
-        // Only draw if visible on screen (with small buffer)
+        // Only draw if visible on screen 
         if (
             drawX >= -20 &&
             drawX <= canvas.width + 20 &&
             drawY >= -20 &&
             drawY <= canvas.height + 20
         ) {
-            // Set opacity for this snowflake
             ctx.globalAlpha = flake.opacity;
             
-            // Draw snowflake as a simple circle
+            // Draw snowflake
             ctx.beginPath();
             ctx.arc(drawX, drawY, flake.size, 0, Math.PI * 2);
             ctx.fill();
         }
         
-        // Update snowflake position - diagonal movement
+        // Update snowflake
         flake.x += flake.speedX;
         flake.y += flake.speedY;
         
         // Check if the snowflake is far outside the camera view
-        // Use a larger boundary than drawing boundary
         const farOffScreen = 
             drawX < -100 || 
             drawX > canvas.width + 100 || 
@@ -3352,34 +3335,31 @@ function drawFallingSnow() {
         // If far off screen, recycle the snowflake to a new position near the camera
         if (farOffScreen) {
             // Determine which edge to place the new snowflake based on the movement direction
-            // Since we're moving diagonally down-left, place new flakes at top or right edges
             const edgeChoice = Math.random() > 0.5 ? 'top' : 'right';
             
             if (edgeChoice === 'top') {
                 // Place at random position along top edge of camera view
                 flake.x = cameraX + Math.random() * canvas.width;
-                flake.y = cameraY - 10 - Math.random() * 20; // Slightly above camera view
+                flake.y = cameraY - 10 - Math.random() * 20; 
             } else {
                 // Place at random position along right edge of camera view
-                flake.x = cameraX + canvas.width + 10 + Math.random() * 20; // Slightly right of camera view
+                flake.x = cameraX + canvas.width + 10 + Math.random() * 20; 
                 flake.y = cameraY + Math.random() * canvas.height;
             }
             
             // Randomize the snowflake properties slightly to keep the effect fresh
             flake.size = Math.random() * 2 + 1;
-            flake.speedX = -(Math.random() * 0.5 + 1); // Always moves left
-            flake.speedY = Math.random() * 0.5 + 1;    // Always moves down
+            flake.speedX = -(Math.random() * 0.5 + 1);
+            flake.speedY = Math.random() * 0.5 + 1;
             flake.opacity = Math.random() * 0.3 + 0.7;
         }
     }
     
-    // Reset global alpha
     ctx.globalAlpha = 1.0;
 }
 
 // Helper function to create a snowflake near the camera
 function createSnowflakeAtCamera() {
-    // Determine start position - either above or to the right of camera view
     const edgeChoice = Math.random() > 0.5 ? 'top' : 'right';
     
     let x, y;
@@ -3387,15 +3367,15 @@ function createSnowflakeAtCamera() {
     if (edgeChoice === 'top') {
         // Place at random position along top edge of camera view
         x = cameraX + Math.random() * canvas.width;
-        y = cameraY - 10 - Math.random() * 20; // Slightly above camera view
+        y = cameraY - 10 - Math.random() * 20;
     } else {
         // Place at random position along right edge of camera view
-        x = cameraX + canvas.width + 10 + Math.random() * 20; // Slightly right of camera view
+        x = cameraX + canvas.width + 10 + Math.random() * 20;
         y = cameraY + Math.random() * canvas.height;
     }
     
     // For initial creation, also randomly place some flakes within the camera view
-    if (Math.random() < 0.3) { // 30% chance
+    if (Math.random() < 0.3) {
         x = cameraX + Math.random() * canvas.width;
         y = cameraY + Math.random() * canvas.height;
     }
@@ -3404,17 +3384,14 @@ function createSnowflakeAtCamera() {
         x: x,
         y: y,
         size: Math.random() * 2 + 1,
-        // Diagonal speed components
-        speedX: -(Math.random() * 0.5 + 1), // Always moves left (negative X)
-        speedY: Math.random() * 0.5 + 1,    // Always moves down (positive Y)
-        // Slight variance in opacity
+        speedX: -(Math.random() * 0.5 + 1), // Always moves left
+        speedY: Math.random() * 0.5 + 1,    // Always moves down
         opacity: Math.random() * 0.3 + 0.7
     };
 }
         
       function drawGameObjects(objects, sprite, fallbackColor) {
     objects.forEach(obj => {
-        // Use our constants instead of default values
         const size = obj === gameObjects.trees ? 
             (obj.size || TREE_SIZE) : 
             (obj === gameObjects.rocks ? 
@@ -3424,7 +3401,7 @@ function createSnowflakeAtCamera() {
         const drawX = obj.x - cameraX;
         const drawY = obj.y - cameraY;
         
-        // Only draw if visible on screen (with buffer)
+        // Only draw if visible on screen
         if (
             drawX + size >= -100 &&
             drawX <= canvas.width + 100 &&
@@ -3439,12 +3416,12 @@ function createSnowflakeAtCamera() {
                 ctx.fillStyle = fallbackColor;
                 
                 if (objects === gameObjects.rocks) {
-                    // Draw rock (irregular circle)
+                    // Draw rock
                     ctx.beginPath();
                     ctx.ellipse(drawX + size/2, drawY + size/2, size/2, size/2 * 0.8, 0, 0, Math.PI * 2);
                     ctx.fill();
                 } else if (objects === gameObjects.trees) {
-                    // Draw tree (triangle top with rectangle trunk)
+                    // Draw tree
                     ctx.fillStyle = '#8B4513'; // Brown trunk
                     ctx.fillRect(drawX + size/3, drawY + size/2, size/3, size/2);
                     
@@ -3484,7 +3461,7 @@ function createSnowflakeAtCamera() {
                             ctx.arc(drawX + COIN_SIZE/2, drawY + COIN_SIZE/2, COIN_SIZE/2, 0, Math.PI * 2);
                             ctx.fill();
                             
-                            // coin detail (inner circle)
+                            // coin detail
                             ctx.fillStyle = '#FFA500';
                             ctx.beginPath();
                             ctx.arc(drawX + COIN_SIZE/2, drawY + COIN_SIZE/2, COIN_SIZE/4, 0, Math.PI * 2);
@@ -3522,7 +3499,7 @@ function createSnowflakeAtCamera() {
             const frameIndex = getAnimationFrame(player);
             
             // Calculate source rectangle from sprite sheet
-            const frameWidth = playerSpriteSheet.width / 20; // Width of one frame
+            const frameWidth = playerSpriteSheet.width / 20;
             const sourceX = frameIndex * frameWidth;
             
             const visualScale = 2.25;
@@ -3536,10 +3513,10 @@ function createSnowflakeAtCamera() {
             const centerX = drawX + PLAYER_SIZE / 2;
             const centerY = drawY + PLAYER_SIZE / 2;
             
-            // REDUCED: Smaller pulse and glow size
+            // Smaller pulse and glow size
             const pulseTime = Date.now() * 0.005;
-            const pulseScale = 1 + Math.sin(pulseTime) * 0.1; // Reduced from 0.15 to 0.1
-            const glowSize = PLAYER_SIZE * 0.7 * pulseScale; // Reduced from 0.9 to 0.6
+            const pulseScale = 1 + Math.sin(pulseTime) * 0.1;
+            const glowSize = PLAYER_SIZE * 0.7 * pulseScale;
             
             // Create a radial gradient for the glow
             const gradient = ctx.createRadialGradient(
@@ -3547,7 +3524,7 @@ function createSnowflakeAtCamera() {
                 centerX, centerY, glowSize
             );
             
-            // Parse the hex color to rgba for transparency
+            // hex color to rgba for transparency
             const r = parseInt(color.slice(1, 3), 16);
             const g = parseInt(color.slice(3, 5), 16);
             const b = parseInt(color.slice(5, 7), 16);
@@ -3565,14 +3542,13 @@ function createSnowflakeAtCamera() {
             // Add smaller glow for current player
             if (id === myId) {
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 15 * pulseScale; // Reduced from 20
+                ctx.shadowBlur = 15 * pulseScale;
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, glowSize * 0.6, 0, Math.PI * 2); // Reduced from 0.7
+                ctx.arc(centerX, centerY, glowSize * 0.6, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.shadowBlur = 0; // Reset shadow for sprite drawing
             }
             
-            // Restore the context state before drawing the sprite
             ctx.restore();
             
             // Draw character sprite with animation
@@ -3632,26 +3608,25 @@ function isPlayerOnIce(playerX, playerY, playerSize) {
     const playerCenterX = playerX + playerSize/2;
     const playerCenterY = playerY + playerSize/2;
     
-    // Check each decorative lake (frozen)
+    // Check each decorative lake
     for (const lake of gameObjects.decorativeLakes) {
-        // Calculate lake center and radiuses
         const lakeCenterX = lake.x + lake.width/2;
         const lakeCenterY = lake.y + lake.height/2;
         const lakeRadiusX = lake.width/2;
         const lakeRadiusY = lake.height/2;
         
-        // Calculate normalized distance from center (elliptical equation)
+        // Calculate normalized distance from center
         const dx = (playerCenterX - lakeCenterX) / lakeRadiusX;
         const dy = (playerCenterY - lakeCenterY) / lakeRadiusY;
         const distanceSquared = dx*dx + dy*dy;
         
         // If the player is inside the lake
         if (distanceSquared <= 1.0) {
-            return true; // Player is on ice
+            return true;
         }
     }
     
-    return false; // Not on ice
+    return false;
 }
       function isPlayerInWater() {
     if (!myId || !players[myId]) return false;
@@ -3664,7 +3639,6 @@ function isPlayerOnIce(playerX, playerY, playerSize) {
     
     // Check each pond
     for (const pond of gameObjects.ponds) {
-        // Use ellipse equation to check if player is in the pond
         const dx = (playerCenter.x - (pond.x + pond.width/2)) / (pond.width/2);
         const dy = (playerCenter.y - (pond.y + pond.height/2)) / (pond.height/2);
         
@@ -3699,7 +3673,7 @@ function castFishingRod() {
     // Play casting sound
     playSound('cast.mp3', 0.4);
     
-    // Calculate bobber position - place it in the pond
+    // Calculate bobber position
     // Get player center coordinates
     const playerCenterX = player.x + PLAYER_SIZE/2;
     const playerCenterY = player.y + PLAYER_SIZE/2;
@@ -3708,7 +3682,7 @@ function castFishingRod() {
     const pondCenterX = pond.x + pond.width/2; 
     const pondCenterY = pond.y + pond.height/2;
     
-    // Calculate position slightly away from center (so it's not exactly in the middle)
+    // Calculate position slightly away from center
     // Create a vector from player to pond center
     const vectorX = pondCenterX - playerCenterX;
     const vectorY = pondCenterY - playerCenterY;
@@ -3727,7 +3701,7 @@ function castFishingRod() {
     fishingBobber = {
         x: bobberX,
         y: bobberY,
-        state: 'waiting', // Can be 'waiting', 'biting', or 'missed'
+        state: 'waiting',
         ripples: [],
         lastRippleTime: Date.now(),
         animationOffset: 0
@@ -3883,7 +3857,7 @@ function drawFishingProgress() {
             ctx.ellipse(bobberDrawX, bobberDrawY + 5, 6, 2, 0, 0, Math.PI * 2);
             ctx.fill();
             
-            // Draw bobber (red and white)
+            // Draw bobber
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
             ctx.arc(bobberDrawX, bobberDrawY + yOffset, 4, 0, Math.PI * 2);
@@ -3938,7 +3912,7 @@ function drawFishingProgress() {
         }
     }
     
-    // If in fishing mode (after bite), show the original progress bar
+    // If in fishing mode, show the original progress bar
     if (isFishing) {
         // Draw fishing progress bar (Your existing code)
         const progressBarWidth = 200;
@@ -3987,7 +3961,7 @@ function catchFish(success) {
     clearTimeout(fishingTimeout);
     isFishing = false;
     currentFishingPond = null;
-    resetFishing(); // Also reset the casting state
+    resetFishing();
     
     if (success) {
         // Request a fish from the server
@@ -4012,7 +3986,6 @@ function toggleFishInventory() {
 
 // Draw the fish inventory screen
 function drawFishInventory() {
-    // Semi-transparent overlay
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -4276,7 +4249,7 @@ function handleInventoryClick(e) {
         canvas.onclick = null; // Remove click handler
         return;
     }
-    // Check if a fish item was clicked (add this new section)
+    // Check if a fish item was clicked
     if (!viewingFishDetails && fishInventory.length > 0) {
         const itemSize = 100;
         const columns = Math.floor((panelWidth - 40) / itemSize);
@@ -4515,7 +4488,7 @@ function drawFishDetails() {
     // Get size range for this fish type
     const fishType = fishSizeRanges[selectedFish.typeId] || {min: 10, max: 100};
     
-    // Draw size visualization (ruler)
+    // Draw size visualization
     const rulerWidth = panelWidth - 60;
     const rulerY = detailStartY + 20;
     
@@ -4526,7 +4499,7 @@ function drawFishDetails() {
     
     // Calculate how far along the ruler this fish's size is
     const sizePosition = (selectedFish.size - minPossibleSize) / sizeRange;
-    const cappedSizePosition = Math.max(0, Math.min(1, sizePosition)); // Ensure between 0-1
+    const cappedSizePosition = Math.max(0, Math.min(1, sizePosition));
     
     // Draw ruler background
     ctx.fillStyle = '#EEEEEE';
