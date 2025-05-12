@@ -1313,6 +1313,10 @@ function handleLogout() {
     // Disconnect from the socket
     socket.disconnect();
     
+    // Refresh the page to ensure a completely clean state
+    window.location.reload();
+    
+    // The code below won't execute due to reload, but keeping it for reference
     // Hide game container and show login form
     gameContainer.style.display = 'none';
     loginContainer.style.display = 'block';
