@@ -660,7 +660,7 @@ let lastMovementUpdate = 0;
 const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
 let lastUpdateTime = 0; 
 let modalInputFocused = false;
-    const BULLET_SPEED = 0;
+    const BULLET_SPEED = 6;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
     let lastShotTime = 0;
@@ -1150,33 +1150,31 @@ window.addEventListener('keydown', (e) => {
                  }
                     }
                 }
-               socket.on('bullets_update', (serverBullets) => {
-    // First, identify bullets on client not on server
+                socket.on('bullets_update', (serverBullets) => {
+    // First, identify bullets on client not on server (remove them)
     const serverBulletIds = new Set(serverBullets.map(b => b.id));
     
-    // Only remove bullets server explicitly removed
+    // Filter out bullets that server no longer has
     bullets = bullets.filter(clientBullet => 
         serverBulletIds.has(clientBullet.id) || 
         clientBullet.hasHit || 
-        clientBullet.pendingRemoval ||
-        // Keep very recent bullets (within 100ms) even if server hasn't acknowledged them yet
-        (clientBullet.createdAt && Date.now() - clientBullet.createdAt < 100)
+        clientBullet.pendingRemoval
     );
     
     // Then update/add bullets from server
     for (const serverBullet of serverBullets) {
-        // Skip bullets we've marked as hit locally
+        // Skip bullets we've already marked as hit locally
         const existingBullet = bullets.find(b => b.id === serverBullet.id);
         
         if (existingBullet) {
+            // If we've marked it as hit locally, don't update it
             if (existingBullet.hasHit || existingBullet.pendingRemoval) {
                 continue;
             }
             
-            // Only update position for interpolation, but movement will use local speed
+            // Update existing bullet position
             existingBullet.x = serverBullet.x;
             existingBullet.y = serverBullet.y;
-            existingBullet.serverManaged = true;
         } else {
             // Add new bullet if we don't already have it
             bullets.push({
@@ -1733,12 +1731,11 @@ function shootBullet() {
         dirY: dirY,
         playerId: myId,
         color: player.color,
-        hasHit: false, // Initialize as not hit
-        speed: BULLET_SPEED // Include the speed in the bullet object
+        hasHit: false // Initialize as not hit
     };
     
     bullets.push(bullet);
-    socket.emit('shoot_bullet', bullet); // Send the speed to the server
+    socket.emit('shoot_bullet', bullet);
     socket.emit('update_ammo', { ammo: currentAmmo });
     playShootSound();
 }
@@ -1779,22 +1776,21 @@ function showAmmoWarning() {
 function updateBullets(deltaTime) {
     // Process removals first to prevent "zombie" bullets
     const bulletsToRemove = new Set();
- const dt = Math.min(deltaTime / 16.667, 2.0);
+
     // First pass - identify bullets to remove
     for (let i = bullets.length - 1; i >= 0; i--) {
-       const bullet = bullets[i];
+        const bullet = bullets[i];
         
         // Skip already marked bullets
         if (bullet.hasHit || bullet.pendingRemoval) {
-            bullets.splice(i, 1);
+            bulletsToRemove.add(bullet.id);
             continue;
         }
-       
-        // Move bullet using deltaTime for frame-rate independent movement
-          bullet.x += bullet.dirX * BULLET_SPEED * dt;
-        bullet.y += bullet.dirY * BULLET_SPEED * dt;
         
-        // Rest of collision detection code remains the same
+        // Move bullet
+        bullet.x += bullet.dirX * BULLET_SPEED;
+        bullet.y += bullet.dirY * BULLET_SPEED;
+        
         // Check if bullet is out of bounds
         if (
             bullet.x < 0 ||
@@ -1807,7 +1803,6 @@ function updateBullets(deltaTime) {
             socket.emit('bullet_removed', bullet.id);
             continue;
         }
-        
         
         // Check collision with obstacles
         let hitObstacle = checkBulletObstacleCollision(bullet);
@@ -2561,10 +2556,6 @@ function drawWaterAnimation(drawX, drawY, pond) {
 }
 // 7. Add bullet drawing function
 function drawBullets() {
-    // Set better rendering quality for bullets
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    
     for (const bullet of bullets) {
         // Skip any bullet that has been marked for removal
         if (bullet.hasHit || bullet.pendingRemoval) continue;
@@ -2579,33 +2570,24 @@ function drawBullets() {
             drawY + BULLET_SIZE >= 0 &&
             drawY <= canvas.height
         ) {
-            // Draw bullet with enhanced visuals
+            // Draw bullet with a black border
             ctx.fillStyle = bullet.color || '#FF0000';
-            
-            // Use save/restore for cleaner state management
-            ctx.save();
-            
-            // Draw main bullet
             ctx.beginPath();
             ctx.arc(drawX, drawY, BULLET_SIZE / 2, 0, Math.PI * 2);
             ctx.fill();
 
             // Add black border
             ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Add motion blur trail for better visual feedback of movement
+            // Optional: Draw trail/tail
             ctx.strokeStyle = bullet.color || '#FF0000';
-            ctx.lineWidth = 3;
-            ctx.globalAlpha = 0.7;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(drawX, drawY);
-            ctx.lineTo(drawX - bullet.dirX * 12, drawY - bullet.dirY * 12);
+            ctx.lineTo(drawX - bullet.dirX * 10, drawY - bullet.dirY * 10);
             ctx.stroke();
-            
-            // Reset global alpha
-            ctx.restore();
         }
     }
 }
@@ -3019,13 +3001,11 @@ function playCoinSound() {
         drawFishInventory();
     }
     
-    
+    updateBullets(16);
      updateMinimap();
-   const now = performance.now();
-    const deltaTime = now - (lastUpdateTime || now);
-    lastUpdateTime = now;
+    const now = Date.now();
     const INTERPOLATION_DURATION = 100; // ms
-    updateBullets(deltaTime);
+    
     // Process position buffer for smooth movement
     for (let i = positionBuffer.length - 1; i >= 0; i--) {
         const move = positionBuffer[i];
