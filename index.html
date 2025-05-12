@@ -660,7 +660,7 @@ let lastMovementUpdate = 0;
 const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
 let lastUpdateTime = 0; 
 let modalInputFocused = false;
-    const BULLET_SPEED = 10;
+    const BULLET_SPEED = 6;
     const BULLET_SIZE = 8;
     const BULLET_COOLDOWN = 500; // Cooldown in milliseconds
     let lastShotTime = 0;
@@ -2523,7 +2523,7 @@ function drawBullets() {
     for (const bullet of bullets) {
         const drawX = bullet.x - cameraX;
         const drawY = bullet.y - cameraY;
-        
+
         // Only draw if visible on screen
         if (
             drawX + BULLET_SIZE >= 0 &&
@@ -2531,12 +2531,17 @@ function drawBullets() {
             drawY + BULLET_SIZE >= 0 &&
             drawY <= canvas.height
         ) {
-            // Draw bullet
-            ctx.fillStyle = bullet.color || '#FF0000';
+            // Draw bullet with a black border
+            ctx.fillStyle = bullet.color || '#FF0000'; // Bullet color
             ctx.beginPath();
-            ctx.arc(drawX, drawY, BULLET_SIZE/2, 0, Math.PI * 2);
+            ctx.arc(drawX, drawY, BULLET_SIZE / 2, 0, Math.PI * 2);
             ctx.fill();
-            
+
+            // Add black border
+            ctx.strokeStyle = '#000000'; // Black border
+            ctx.lineWidth = 2; // Border thickness
+            ctx.stroke();
+
             // Optional: Draw trail/tail
             ctx.strokeStyle = bullet.color || '#FF0000';
             ctx.lineWidth = 2;
