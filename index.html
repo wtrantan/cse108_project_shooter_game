@@ -3345,8 +3345,8 @@ function createSnowflakeAtCamera() {
             const sourceX = frameIndex * frameWidth;
             
             // Draw player's colored square as base (for customization)
-            // ctx.fillStyle = player.color || '#FF0000';
-            // ctx.fillRect(drawX, drawY, PLAYER_SIZE, PLAYER_SIZE);
+            ctx.fillStyle = player.color || '#FF0000';
+            ctx.fillRect(drawX+7, drawY+3, PLAYER_SIZE-12, PLAYER_SIZE-13);
             
             const visualScale = 2.25; //change scale
             const sizeIncrease = PLAYER_SIZE * (visualScale - 1);
