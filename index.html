@@ -655,9 +655,9 @@ const inputBuffer = [];
 const MAX_BUFFER_SIZE = 10;
 const positionBuffer = [];
 let lastInputTime = 0;
-const INPUT_SEND_INTERVAL = 50; // ms
+const INPUT_SEND_INTERVAL = 50; 
 let lastMovementUpdate = 0;
-const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms (~30 updates/sec)
+const MOVEMENT_UPDATE_INTERVAL = 33; // Send position updates at most every 33ms
 let lastUpdateTime = 0; 
 let modalInputFocused = false;
     const BULLET_SPEED = 6;
@@ -673,33 +673,33 @@ let modalInputFocused = false;
         const playerSprite = new Image();
         playerSprite.src = '/player-penguin.png';
         const baitPackSprite = new Image();
-baitPackSprite.src = '/worm.png'; // Create this image or use a placeholder    
+baitPackSprite.src = '/worm.png'; 
         const pondSprite = new Image();
-        pondSprite.src = '/'; // Create this image or use a placeholder
+        pondSprite.src = '/'; 
 //         const fishingRodSprite = new Image();
-// fishingRodSprite.src = '/fishing-rod.png'; // Create this image or use a placeholder
+// fishingRodSprite.src = '/fishing-rod.png'; 
         const treeSprite = new Image();
 
         const fishSprites = {};
 for (let i = 1; i <= 16; i++) {
     fishSprites[`fish${i}`] = new Image();
-    fishSprites[`fish${i}`].src = `/fish${i}.png`; // Create these images or use placeholders
+    fishSprites[`fish${i}`].src = `/fish${i}.png`;
 }
-        treeSprite.src = '/pine_tree_Show.png'; // Create this image or use a placeholder
+        treeSprite.src = '/pine_tree_Show.png';
         
         const rockSprite = new Image();
-        rockSprite.src = '/Snow_rocks.png'; // Create this image or use a placeholder
+        rockSprite.src = '/Snow_rocks.png';
         
         const coinSprite = new Image();
-        coinSprite.src = '/coin.png'; // Create this image or use a placeholder
+        coinSprite.src = '/coin.png';
         
         const ammoPackSprite = new Image();
-        ammoPackSprite.src = '/Snowball2.png'; // Create this image or use a placeholder
+        ammoPackSprite.src = '/Snowball2.png';
         // Camera tracking
         let cameraX = 0;
         let cameraY = 0;
-        const WORLD_WIDTH = 4000;  // Increased from 2000
-        const WORLD_HEIGHT = 3000; // Increased from 1500
+        const WORLD_WIDTH = 4000;
+        const WORLD_HEIGHT = 3000;
         
         // DOM elements
         const loginContainer = document.getElementById('loginContainer');
@@ -998,7 +998,6 @@ canvas.addEventListener('click', function(e) {
         isFishingCast = false;
         startFishing();
         
-        // IMPORTANT: Stop event from being processed further
         return;
     }
      
@@ -1015,7 +1014,6 @@ canvas.addEventListener('click', function(e) {
         });
     }
     
-    // Show message
     addChatMessage('System', "You scared the fish away by clicking too early!");
     
     // Clear any pending timeouts
@@ -1023,12 +1021,10 @@ canvas.addEventListener('click', function(e) {
         clearTimeout(fishingBiteTimeout);
     }
     
-    // Reset fishing after a short delay to show the ripples
     setTimeout(() => {
         resetFishing();
     }, 1000);
     
-    // IMPORTANT: Stop event from being processed further
     return;
 }
     
@@ -1056,14 +1052,11 @@ canvas.addEventListener('click', function(e) {
         
         // Handle fishing success or failure
         if (inSuccessZone) {
-            // Success! Player clicked in the green zone
             catchFish(true);
         } else {
-            // Failed - player clicked outside the green zone
             catchFish(false);
         }
         
-        // IMPORTANT: Stop event from being processed further
         return;
     }
     
@@ -1975,10 +1968,10 @@ if (currentBait >= MAX_BAIT) {
     }
 
     const playerHitbox = {
-        x: player.x + 5,            // Reduced padding from 10 to 5
-        y: player.y + 5,            // Reduced padding from 10 to 5
-        width: PLAYER_SIZE - 10,    // Increased from PLAYER_SIZE - 20
-        height: PLAYER_SIZE - 10    // Increased from PLAYER_SIZE - 20
+        x: player.x + 5,           
+        y: player.y + 5,         
+        width: PLAYER_SIZE - 10,  
+        height: PLAYER_SIZE - 10 
     };
     // Check collision with each bait pack
     gameObjects.baitPacks.forEach(baitPack => {
@@ -2963,7 +2956,7 @@ function playCoinSound() {
     player.animTimer++;
     
     // Change animation frame less frequently for other players
-    const frameChangeThreshold = id === myId ? 12 : 12; // Increased from 32 to 45 for other players
+    const frameChangeThreshold = id === myId ? 12 : 12;
     
     if (player.animTimer >= frameChangeThreshold) {
         player.animFrame = player.animFrame || 0;
@@ -3225,8 +3218,8 @@ function drawClouds() {
     
     // Create fewer clouds with larger minimum size
     // and make them move horizontally
-    const cloudSpacingX = 1200; // Increased from 800 for larger world
-    const cloudSpacingY = 800;  // Increased from 500 for larger world
+    const cloudSpacingX = 1200;
+    const cloudSpacingY = 800; 
     
     // Determine visible area based on camera position
     const visibleLeft = cameraX;
@@ -3257,8 +3250,8 @@ function drawClouds() {
             baseX = (baseX + movement) % (WORLD_WIDTH + cloudSpacingX);
             if (baseX < -cloudSpacingX) baseX += WORLD_WIDTH + cloudSpacingX;
             
-            // Determine cloud size (larger minimum size)
-            const minSize = 220; // Increased minimum size
+            // Determine cloud size
+            const minSize = 220;
             const maxSize = 500;
             const sizeVariation = Math.max(0.5, 1 - (baseY / WORLD_HEIGHT));
             const cloudSize = minSize + (maxSize - minSize) * sizeVariation * random;
