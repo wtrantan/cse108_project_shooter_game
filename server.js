@@ -10,7 +10,7 @@ const bodyParser = require('body-parser');
 
 process.env.NODE_ENV = 'production';
 
-// Add a throttled version of the game state broadcast
+// Throttled version of the game state broadcast
 let fullStateUpdatePending = false;
 const FULL_STATE_UPDATE_INTERVAL = 3000; // 3 seconds
 
@@ -42,7 +42,6 @@ function getCompressedGameObjects() {
 }
 
 // Call this after any major state change
-// For example, in collect_coin, collect_ammo, etc.
 scheduleFullStateUpdate();
 
 // Initialize app
@@ -153,9 +152,9 @@ function ensureAdminExists() {
     });
 }
 
-// Replace your existing call with this:
+
 db.serialize(() => {
-    // Your table creation code...
+
     
     // Clean up and setup admin user
     cleanupAndSetupAdmin();
@@ -170,7 +169,7 @@ const gameObjects = {
     trees: [],
     rocks: [],
     coins: [],
-    ammoPacks: [], // Add this new array
+    ammoPacks: [],
     baitPacks: [],
     ponds: [], // New ponds array
      decorativeLakes: [] // New purely cosmetic frozen lakes
@@ -204,8 +203,8 @@ const fishTypes = [
     { id: 15, name: "Wailord", minSize: 1450, maxSize: 2000, rarity: "Mythical", chance: 0.009 },
     { id: 16, name: "Lapras", minSize: 150, maxSize: 300, rarity: "Mythical", chance: 0.009 }
 ];
-const WORLD_WIDTH = 4000;  // Make sure this matches your client-side value
-const WORLD_HEIGHT = 3000; // Make sure this matches your client-side value
+const WORLD_WIDTH = 4000;  
+const WORLD_HEIGHT = 3000; 
 const bullets = [];
 const BULLET_SPEED = 10;
 const BULLET_DAMAGE = 10;
@@ -338,8 +337,6 @@ function generateGameObjects(mapWidth, mapHeight) {
         }
     }
     
-    // STEP 2: GENERATE TREES AND ROCKS
-    // ================================
     
     // Generate trees - scale up count for larger world
     const treeCount = Math.floor(Math.random() * 21) + 40; // 40-60 trees
@@ -511,7 +508,7 @@ for (let i = 0; i < ammoPackCount; i++) {
      const baitPackCount = Math.floor(Math.random() * 8) + 7; // Increased from 3-7 to 7-14
      
 for (let i = 0; i < baitPackCount; i++) {
-    // For bait, we prefer positions near water but not in deep water
+    
     let position;
     
     if (gameObjects.ponds.length > 0 && Math.random() < 0.7) {
@@ -573,9 +570,9 @@ function updateServerBullets() {
         // Check if bullet is out of bounds
         if (
             bullet.x < 0 ||
-            bullet.x > 4000 || // Updated from 2000
+            bullet.x > 4000 || 
             bullet.y < 0 ||
-            bullet.y > 3000    // Updated from 1500
+            bullet.y > 3000    
         ) {
             bullets.splice(i, 1);
             continue;
@@ -984,10 +981,9 @@ app.post('/api/admin/login', async (req, res) => {
             }
             
             // Return success with admin token
-            // In a real app, you would use JWT or another secure token method
             const adminToken = require('crypto').randomBytes(64).toString('hex');
             
-            // Store the token (in-memory for simplicity - in production use Redis or similar)
+            // Store the token
             app.locals.adminToken = adminToken;
             
             return res.status(200).json({
@@ -1000,17 +996,7 @@ app.post('/api/admin/login', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
-// app.use('/admin', (req, res, next) => {
-//     const basicAuth = require('basic-auth');
-//     const user = basicAuth(req);
-    
-//     if (!user || user.name !== process.env.ADMIN_USER || user.pass !== process.env.ADMIN_PASS) {
-//         res.set('WWW-Authenticate', 'Basic realm="Admin Area"');
-//         return res.status(401).send('Authentication required');
-//     }
-    
-//     next();
-// });
+
 // Middleware to verify admin token
 function verifyAdminToken(req, res, next) {
     const token = req.headers['x-admin-token'];
@@ -1393,7 +1379,6 @@ socket.on('catch_fish', () => {
     if (players[socket.id]) {
         const player = players[socket.id];
         
-        // Check if player is near water (simple implementation)
        
     
         // Determine which fish is caught based on rarity chances
@@ -1640,8 +1625,7 @@ socket.on('search_player_fish', (data) => {
                         fishes: formattedFishes
                     });
                     
-                    // Optional: Notify the player that someone viewed their collection
-                    // Only if they're online
+                    // Notify the player that someone viewed their collection (Only if they're online)
                     const targetSocketId = Object.keys(players).find(
                         id => players[id].username.toLowerCase() === correctUsername.toLowerCase()
                     );
@@ -1680,10 +1664,10 @@ socket.on('shoot_bullet', (bulletData) => {
             return;
         }
         
-        // Add server timestamp for bullet lifetime tracking
+        // Server timestamp for bullet lifetime tracking
         bulletData.timestamp = Date.now();
         
-        // Add bullet to server list
+        // Bullet to server list
         bullets.push(bulletData);
         
         // Broadcast the new bullet to all players
@@ -1803,7 +1787,7 @@ socket.on('collect_bait', (baitPackId) => {
     }
 });
 
-// 5. Add handler for updating bait count
+// Handler for updating bait count
 socket.on('update_bait', (data) => {
     if (players[socket.id]) {
         players[socket.id].bait = data.bait;
@@ -1826,11 +1810,6 @@ socket.on('collect_ammo', (ammoPackId) => {
             // Broadcast updated game state
             io.emit('game_state', { players, gameObjects });
             
-            // Send notification
-            // io.emit('chat_message', {
-            //     username: 'System',
-            //     message: `${username} collected ammo! Ammo: ${players[socket.id].ammo}`
-            // });
             
             // Send direct ammo update to the client
             socket.emit('ammo_update', { ammo: players[socket.id].ammo });
@@ -1869,7 +1848,7 @@ socket.on('update_ammo', (data) => {
 });
 
 
-    // Add a new handler for coin collection
+    // Handler for coin collection
 socket.on('collect_coin', (coinId) => {
     if (players[socket.id]) {
         const username = players[socket.id].username;
@@ -1893,11 +1872,6 @@ socket.on('collect_coin', (coinId) => {
             // Broadcast updated game state
             io.emit('game_state', { players, gameObjects });
             
-            // Send notification
-            // io.emit('chat_message', {
-            //     username: 'System',
-            //     message: `${username} collected a coin! Score: ${players[socket.id].score}`
-            // });
             
             // Generate a new coin after some time
             setTimeout(() => {
@@ -1942,8 +1916,6 @@ socket.on('collect_coin', (coinId) => {
             players[socket.id].lastUpdate = Date.now();
             players[socket.id].lastClientTimestamp = clientTimestamp;
             
-            // Use selective broadcasting - don't send full game state every time
-            // Only send to players who are close enough to care about this movement
             const updatedPlayer = players[socket.id];
             const nearbyPlayers = getNearbyPlayerSockets(socket.id, 1500); // 1500px radius
             
@@ -2151,7 +2123,6 @@ function checkServerCollision(playerId, position) {
     return false; // No collision
 }
 function checkServerBulletObstacleCollision(bullet) {
-    // Same collision logic as client side
     // Check rocks
     for (const rock of gameObjects.rocks) {
         const rockSize = rock.size || 40;
@@ -2183,7 +2154,7 @@ function checkServerBulletObstacleCollision(bullet) {
 }
 // Find a safe spawn position that doesn't overlap with objects
 function findSafeSpawnPosition(worldWidth, worldHeight, playerSize) {
-    const padding = 50; // Add some padding from the edges
+    const padding = 50; 
     let attempts = 0;
     const maxAttempts = 30; // Limit number of attempts to prevent infinite loops
     
@@ -2201,7 +2172,6 @@ function findSafeSpawnPosition(worldWidth, worldHeight, playerSize) {
     }
     
     // If no safe position found after max attempts, use a predetermined safe area
-    // This could be a spawn area you've manually verified is clear of obstacles
     return { 
         x: worldWidth / 2, 
         y: worldHeight / 2 
@@ -2256,7 +2226,7 @@ function isPositionColliding(x, y, playerSize) {
         }
     }
     
-    // Check collision with ponds (players should be able to spawn in water, but it's optional)
+    // Check collision with ponds (players should be able to spawn in water)
     for (const pond of gameObjects.ponds) {
         // Simple rectangular collision check for ponds
         if (
@@ -2416,7 +2386,7 @@ function updatePendingScores() {
     pendingScoreUpdates.clear();
 }
 setInterval(updatePendingScores, SCORE_UPDATE_INTERVAL);
-// Add this function to find a valid position for items
+// Find a valid position for items
 function findValidItemPosition(itemSize, worldWidth, worldHeight, gameObjects, maxAttempts = 30) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Generate random position
@@ -2429,8 +2399,7 @@ function findValidItemPosition(itemSize, worldWidth, worldHeight, gameObjects, m
         }
     }
     
-    // If no valid position found after max attempts, use a simpler approach
-    // Just try to avoid deep water, don't worry about other objects
+    
     for (let attempt = 0; attempt < 10; attempt++) {
         const x = Math.random() * (worldWidth - itemSize);
         const y = Math.random() * (worldHeight - itemSize);
