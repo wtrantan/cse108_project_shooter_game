@@ -2788,6 +2788,10 @@ function playCoinSound() {
                 requestAnimationFrame(gameLoop);
                 return;
             }
+            if (!players[myId].momentum) {
+    players[myId].momentum = { x: 0, y: 0 };
+    players[myId].isOnIce = false;
+}
              // Update player movement based on key states
             updatePlayerMovement();
             // Update camera position to follow player
@@ -2824,7 +2828,7 @@ function playCoinSound() {
           
             
             // Draw coins
-           for (const id in players) {
+        for (const id in players) {
     const player = players[id];
     
     // For our own player, determine movement state from keys
@@ -2844,11 +2848,37 @@ function playCoinSound() {
                 Math.abs(player.x - player.prevX) > 0.1 || 
                 Math.abs(player.y - player.prevY) > 0.1;
                 
-            // Update direction based on movement
-            if (Math.abs(player.x - player.prevX) > Math.abs(player.y - player.prevY)) {
-                player.direction = player.x > player.prevX ? 'right' : 'left';
-            } else if (Math.abs(player.y - player.prevY) > 0.1) {
-                player.direction = player.y > player.prevY ? 'down' : 'up';
+            if (player.isMoving) {
+                // Calculate movement magnitude in each direction
+                const dx = Math.abs(player.x - player.prevX);
+                const dy = Math.abs(player.y - player.prevY);
+                
+                // Only update direction if there's significant movement
+                // This prevents rapid direction changes during small movements
+                const movementThreshold = 0.3;
+                
+                // Direction change hysteresis - require more movement to change direction
+                const directionChangeThreshold = player.lastDirection === player.direction ? 1.2 : 1.0;
+                
+                if (dx > movementThreshold || dy > movementThreshold) {
+                    // Determine primary movement direction with hysteresis
+                    // This prevents rapid switching between horizontal/vertical during diagonal movement
+                    let newDirection = player.direction; // Default to keeping current direction
+                    
+                    if (dx > dy * directionChangeThreshold) {
+                        // Horizontal movement dominates
+                        newDirection = player.x > player.prevX ? 'right' : 'left';
+                    } else if (dy > dx * directionChangeThreshold) {
+                        // Vertical movement dominates
+                        newDirection = player.y > player.prevY ? 'down' : 'up';
+                    }
+                    
+                    // Store last direction before changing
+                    player.lastDirection = player.direction;
+                    
+                    // Update direction if it changed
+                    player.direction = newDirection;
+                }
             }
         }
         
@@ -2858,25 +2888,34 @@ function playCoinSound() {
     }
     
     // Update animation frame counter
-    if (player.isMoving) {
-        player.animTimer = player.animTimer || 0;
-        player.animTimer++;
-        // Change animation frame every 8 game loops
-        if (player.animTimer >= 8) {
-            player.animFrame = player.animFrame || 0;
-            player.animFrame = (player.animFrame + 1) % 4; // 4 frames per direction
-            player.animTimer = 0;
-        }
-    } else {
-        // Reset animation when idle
+  if (player.isMoving) {
+    player.animTimer = player.animTimer || 0;
+    player.animTimer++;
+    
+    // Change animation frame less frequently for other players
+    const frameChangeThreshold = id === myId ? 12 : 12; // Increased from 32 to 45 for other players
+    
+    if (player.animTimer >= frameChangeThreshold) {
+        player.animFrame = player.animFrame || 0;
+        player.animFrame = (player.animFrame + 1) % 4; // 4 frames per direction
+        player.animTimer = 0;
+    }
+    
+    // Store last animation time to prevent rapid resets
+    player.lastAnimTime = Date.now();
+} else {
+    // Only reset animation when definitely idle for a while (debounce)
+    // This prevents animation resetting during tiny pauses in network updates
+    if (!player.lastAnimTime || (Date.now() - player.lastAnimTime > 500)) {
         player.animFrame = 0;
         player.animTimer = 0;
     }
 }
+}
             drawPlayers();
             drawGameObjects(gameObjects.trees, treeSprite, 'green');
             drawGameObjects(gameObjects.rocks, rockSprite, 'gray');
-             
+               drawIceParticles();
              // Draw ammo packs
             drawAmmoPacks();
             if (isFishing || isFishingCast) {
@@ -2926,7 +2965,7 @@ function playCoinSound() {
             // Continue the game loop
             requestAnimationFrame(gameLoop);
         }
-       function updatePlayerMovement() {
+   function updatePlayerMovement() {
     if (!myId || !players[myId]) return;
     
     const player = players[myId];
@@ -2934,15 +2973,14 @@ function playCoinSound() {
     let newY = player.y;
     let moved = false;
     
-
-      // Save original position for rollback if needed
+    // Save original position for rollback if needed
     const originalX = player.x;
     const originalY = player.y;
     
-    // Define a fixed pixels-per-second speed that is consistent across all devices
+    // Define movement parameters
     const CONSTANT_SPEED = 300; // pixels per second
     
-    // Calculate elapsed time since last frame in seconds (not milliseconds)
+    // Calculate elapsed time since last frame in seconds
     const now = performance.now();
     const deltaTimeSeconds = (now - (lastUpdateTime || now)) / 1000;
     lastUpdateTime = now;
@@ -2950,48 +2988,81 @@ function playCoinSound() {
     // Apply a strict cap to prevent huge jumps if the game freezes momentarily
     const cappedDeltaTime = Math.min(deltaTimeSeconds, 0.1); // max 100ms
     
-    // Calculate distance to move this frame
+    // Check if the player is on ice
+    const onIce = isPlayerOnIce(player.x, player.y, PLAYER_SIZE);
+    player.isOnIce = onIce;
+    
+    // Different physics parameters based on surfa1e
+  const acceleration = onIce ? 0.1 : 1.0; // Slower acceleration on ice
+    const friction = onIce ? 0.98 : 0.1;   // Less friction (more slippery) on ice
+    
+    // Calculate base movement distance
     const moveDistance = CONSTANT_SPEED * cappedDeltaTime;
     
-    // Apply movement based on active keys
-    if (keys.up) {
-        newY -= moveDistance;
-        moved = true;
-    }
-    if (keys.down) {
-        newY += moveDistance;
-        moved = true;
-    }
-    if (keys.left) {
-        newX -= moveDistance;
-        moved = true;
-    }
-    if (keys.right) {
-        newX += moveDistance;
-        moved = true;
-    }
+    // Apply forces based on key presses (acceleration)
+   if (keys.up) {
+    player.momentum.y -= moveDistance * acceleration;
+    moved = true;
+}
+if (keys.down) {
+    player.momentum.y += moveDistance * acceleration;
+    moved = true;
+}
+if (keys.left) {
+    player.momentum.x -= moveDistance * acceleration;
+    moved = true;
+}
+if (keys.right) {
+    player.momentum.x += moveDistance * acceleration;
+    moved = true;
+}
+
+// Apply diagonal normalization - MODIFIED for better ice physics
+if ((keys.up || keys.down) && (keys.left || keys.right)) {
+    // Use a milder diagonal factor on ice to prevent feeling sluggish
+    const diagonalFactor = onIce ? 0.9 : 0.7071; // Higher value on ice
+    player.momentum.x *= diagonalFactor;
+    player.momentum.y *= diagonalFactor;
+}
     
-    // Apply diagonal normalization to prevent faster diagonal movement
-    if ((keys.up || keys.down) && (keys.left || keys.right)) {
-        const diagonalFactor = 0.7071; // 1/sqrt(2)
-        
-        if (keys.up || keys.down) {
-            newY = player.y + (newY - player.y) * diagonalFactor;
-        }
-        if (keys.left || keys.right) {
-            newX = player.x + (newX - player.x) * diagonalFactor;
-        }
-    }
+    // Apply momentum (this is what creates the sliding effect)
+    newX += player.momentum.x;
+    newY += player.momentum.y;
     
+    // Apply friction to slow down
+    player.momentum.x *= friction;
+    player.momentum.y *= friction;
+    
+    // If momentum is very small, just stop completely
+    if (Math.abs(player.momentum.x) < 0.1) player.momentum.x = 0;
+    if (Math.abs(player.momentum.y) < 0.1) player.momentum.y = 0;
     
     // Keep player within world bounds
-    if (newX < 0) newX = 0;
-    if (newY < 0) newY = 0;
-    if (newX > WORLD_WIDTH - PLAYER_SIZE) newX = WORLD_WIDTH - PLAYER_SIZE;
-    if (newY > WORLD_HEIGHT - PLAYER_SIZE) newY = WORLD_HEIGHT - PLAYER_SIZE;
+    if (newX < 0) {
+        newX = 0;
+        player.momentum.x = 0; // Stop momentum when hitting wall
+    }
+    if (newY < 0) {
+        newY = 0;
+        player.momentum.y = 0; // Stop momentum when hitting wall
+    }
+    if (newX > WORLD_WIDTH - PLAYER_SIZE) {
+        newX = WORLD_WIDTH - PLAYER_SIZE;
+        player.momentum.x = 0; // Stop momentum when hitting wall
+    }
+    if (newY > WORLD_HEIGHT - PLAYER_SIZE) {
+        newY = WORLD_HEIGHT - PLAYER_SIZE;
+        player.momentum.y = 0; // Stop momentum when hitting wall
+    }
+    
+    // Visual ice indicator (optional)
+    if (onIce && (Math.abs(player.momentum.x) > 0.5 || Math.abs(player.momentum.y) > 0.5)) {
+        // Create sliding effects/particles behind player
+        createIceSlideEffect(player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2);
+    }
     
     // Check for collision with obstacles
-    if (moved && !checkCollision(player, newX, newY)) {
+    if ((moved || player.momentum.x !== 0 || player.momentum.y !== 0) && !checkCollision(player, newX, newY)) {
         // Apply movement locally first (client-side prediction)
         players[myId].x = newX;
         players[myId].y = newY;
@@ -3011,11 +3082,60 @@ function playCoinSound() {
                 timestamp: now
             });
         }
-    } else if (moved) {
-        // If there's a collision, revert to last valid position
+    } else if (moved || player.momentum.x !== 0 || player.momentum.y !== 0) {
+        // If there's a collision, stop momentum
+        player.momentum.x = 0;
+        player.momentum.y = 0;
+        
+        // Revert to last valid position
         players[myId].x = originalX;
         players[myId].y = originalY;
     }
+}
+function createIceSlideEffect(x, y) {
+    // Create ice particle effects
+    for (let i = 0; i < 2; i++) { // Keep particle count low for performance
+        const particle = {
+            x: x + (Math.random() * 10 - 5),
+            y: y + (Math.random() * 10 - 5),
+            size: Math.random() * 2 + 1,
+            opacity: Math.random() * 0.3 + 0.2,
+            lifetime: 10,
+            maxLifetime: 10
+        };
+        
+        // Add to particles array if you have one, or render directly
+        // If you have a particle system:
+        if (!window.iceParticles) window.iceParticles = [];
+        window.iceParticles.push(particle);
+    }
+}
+
+// Add this to your gameLoop to render ice particles
+function drawIceParticles() {
+    if (!window.iceParticles) return;
+    
+    ctx.fillStyle = '#FFFFFF';
+    
+    for (let i = window.iceParticles.length - 1; i >= 0; i--) {
+        const p = window.iceParticles[i];
+        
+        // Draw particle
+        ctx.globalAlpha = p.opacity * (p.lifetime / p.maxLifetime);
+        ctx.beginPath();
+        ctx.arc(p.x - cameraX, p.y - cameraY, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Update lifetime
+        p.lifetime--;
+        
+        // Remove dead particles
+        if (p.lifetime <= 0) {
+            window.iceParticles.splice(i, 1);
+        }
+    }
+    
+    ctx.globalAlpha = 1.0;
 }
 function drawClouds() {
     // Winter cloud settings - using blue-gray tones
@@ -3403,7 +3523,32 @@ function findNearestPond(playerX, playerY) {
     
     return { pond: nearestPond, distance: shortestDistance };
 }
-
+function isPlayerOnIce(playerX, playerY, playerSize) {
+    // Calculate player center coordinates
+    const playerCenterX = playerX + playerSize/2;
+    const playerCenterY = playerY + playerSize/2;
+    
+    // Check each decorative lake (frozen)
+    for (const lake of gameObjects.decorativeLakes) {
+        // Calculate lake center and radiuses
+        const lakeCenterX = lake.x + lake.width/2;
+        const lakeCenterY = lake.y + lake.height/2;
+        const lakeRadiusX = lake.width/2;
+        const lakeRadiusY = lake.height/2;
+        
+        // Calculate normalized distance from center (elliptical equation)
+        const dx = (playerCenterX - lakeCenterX) / lakeRadiusX;
+        const dy = (playerCenterY - lakeCenterY) / lakeRadiusY;
+        const distanceSquared = dx*dx + dy*dy;
+        
+        // If the player is inside the lake
+        if (distanceSquared <= 1.0) {
+            return true; // Player is on ice
+        }
+    }
+    
+    return false; // Not on ice
+}
       function isPlayerInWater() {
     if (!myId || !players[myId]) return false;
     
